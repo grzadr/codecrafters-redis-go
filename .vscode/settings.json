@@ -1,0 +1,52 @@
+{
+    // Editor general settings
+    "editor.formatOnSave": true,
+    "editor.formatOnSaveMode": "file",
+    "editor.rulers": [
+        80
+    ],
+    "editor.wordWrap": "off",
+    "editor.renderWhitespace": "all",
+    // Files management
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "files.autoSave": "afterDelay",
+    "files.autoSaveDelay": 500,
+    "files.associations": {
+        ".env": "shellscript",
+        "*.sh": "shellscript",
+        ".secrets": "shellscript"
+    },
+    "go.lintTool": "golangci-lint",
+    "go.lintFlags": [
+        "--path-mode=abs",
+        "--fast-only"
+    ],
+    "go.formatTool": "custom",
+    "go.alternateTools": {
+        "customFormatter": "golangci-lint"
+    },
+    "go.formatFlags": [
+        "fmt",
+        "--stdin"
+    ],
+    "go.useLanguageServer": true,
+    "gopls": {
+        "usePlaceholders": true,
+        "staticcheck": true
+    },
+    // Language-specific settings
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "always"
+        }
+    },
+    "[github-actions-workflow]": {
+        "editor.detectIndentation": false,
+        "editor.indentSize": 2
+    },
+    "cSpell.words": [
+        "fsys"
+    ]
+}
