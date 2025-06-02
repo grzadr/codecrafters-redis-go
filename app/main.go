@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
+
+	"github.com/codecrafters-io/redis-starter-go/commands"
 )
 
 func connectTcp(address string) *net.TCPListener {
@@ -20,7 +23,7 @@ func connectTcp(address string) *net.TCPListener {
 	return list
 }
 
-func pong(conn *net.TCPConn, errCh chan error) {
+func handleConn(conn *net.TCPConn, errCh chan error) {
 	defer func() {
 		if err := conn.Close(); err != nil {
 			errCh <- err
@@ -40,8 +43,17 @@ func pong(conn *net.TCPConn, errCh chan error) {
 			}
 		}
 		log.Println(string(buf[:n]))
-		if _, err := conn.Write([]byte("+PONG\r\n")); err != nil {
-			errCh <- err
+		output, err := commands.ExecuteCommand(buf[:n])
+		if err != nil {
+			errCh <- fmt.Errorf("error during cmd execution: %w", err)
+		}
+
+		if output == nil {
+			errCh <- fmt.Errorf("missing command output")
+		}
+
+		if _, err := conn.Write(output.Serialize()); err != nil {
+			errCh <- fmt.Errorf("error sending data: %w", err)
 		}
 		// conn.CloseWrite()
 	}
@@ -63,6 +75,6 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error accepting connection: %s\n", err)
 		}
-		go pong(conn, errCh)
+		go handleConn(conn, errCh)
 	}
 }
