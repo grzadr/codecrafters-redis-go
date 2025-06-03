@@ -9,24 +9,24 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
-type ContentError struct {
+type CommandError struct {
 	content []byte
 	message error
 }
 
-func (e ContentError) Error() string {
-	return fmt.Sprintf("malformed content %q: %s\n%s",
+func (e CommandError) Error() string {
+	return fmt.Sprintf("failed to process command %q: %s\n%s",
 		string(e.content), e.message, hex.Dump(e.content))
 }
 
-func NewContentError(content []byte, message error) error {
-	return ContentError{content: content, message: message}
+func NewCommandError(content []byte, message error) error {
+	return CommandError{content: content, message: message}
 }
 
 type RhelCommand interface {
 	isRhelCommand()
 	Name() string
-	Exec(rheltypes.RhelType) (rheltypes.RhelType, error)
+	Exec(rheltypes.Array) (rheltypes.RhelType, error)
 }
 
 type UnknownCommand string
@@ -38,55 +38,62 @@ func (c UnknownCommand) Name() string {
 }
 
 func (c UnknownCommand) Exec(
-	value rheltypes.RhelType,
+	value rheltypes.Array,
 ) (rheltypes.RhelType, error) {
-	return nil, fmt.Errorf("command not found %s", c.Name())
-}
-
-var commands = map[string]RhelCommand{
-	"PING": CmdPing{},
-	"ECHO": CmdEcho{},
+	return nil, fmt.Errorf("command %q not found", c.Name())
 }
 
 func NewRhelCommand(
-	value rheltypes.RhelType,
+	name string,
 ) (cmd RhelCommand) {
-	cmdStr := strings.ToUpper(value.First().String())
-	var found bool
-
-	if cmd, found = commands[cmdStr]; !found {
-		return UnknownCommand(cmdStr)
+	switch strings.ToUpper(name) {
+	case "PING":
+		return CmdPing{}
+	case "ECHO":
+		return CmdEcho{}
+	default:
+		return UnknownCommand(name)
 	}
-
-	return
 }
 
-func ExecuteCommand(content []byte) (result rheltypes.RhelType, err error) {
-	log.Printf("Command %q:\n%s", content, hex.Dump(content))
-	tokens, err := rheltypes.NewTokenIterator(content)
+func parseCommand(
+	command []byte,
+) (cmd RhelCommand, args rheltypes.Array, err error) {
+	wrap := func(newErr error) error {
+		if newErr != nil {
+			return fmt.Errorf("error in parseCommand: %w", newErr)
+		}
+		return nil
+	}
+	tokens, err := rheltypes.NewTokenIterator(command)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"tokenization error: %w",
-			NewContentError(content, err),
-		)
+		return nil, nil, wrap(fmt.Errorf("tokenization error: %w", err))
 	}
 
-	value, err := rheltypes.RhelEncode(tokens)
+	rawValue, err := rheltypes.RhelEncode(tokens)
 	if err != nil {
-		return nil, NewContentError(
-			content,
-			fmt.Errorf("encoding error: %w", err),
-		)
-	}
-	cmd := NewRhelCommand(value)
-	result, err = cmd.Exec(value)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"command %s execution error: %w",
-			cmd.Name(),
-			NewContentError(content, err),
-		)
+		return nil, nil, wrap(fmt.Errorf("encoding error: %w", err))
 	}
 
+	switch value := rawValue.(type) {
+	case rheltypes.Array:
+		return NewRhelCommand(value[0].String()), value[1:], nil
+	default:
+		return nil, nil, wrap(fmt.Errorf("expected array, got %T", value))
+	}
+}
+
+func ExecuteCommand(command []byte) (result rheltypes.RhelType, err error) {
+	log.Printf("Command %q:\n%s", command, hex.Dump(command))
+
+	cmd, args, err := parseCommand(command)
+	if err != nil {
+		return nil, NewCommandError(command, err)
+	}
+
+	result, err = cmd.Exec(args)
+	if err != nil {
+		return nil, NewCommandError(command, err)
+	}
 	return
 }

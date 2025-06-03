@@ -13,6 +13,10 @@ formatters:
       max-len: 80
       shorten-comments: true
       reformat-tags: false
+    gofumpt:
+      # Choose whether to use the extra rules.
+      # Default: false
+      extra-rules: true
 
     # goimports:
     #   # A list of prefixes, which, if set, checks import paths

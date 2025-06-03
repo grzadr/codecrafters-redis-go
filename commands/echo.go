@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
@@ -15,18 +14,19 @@ func (CmdEcho) Name() string {
 	return "ECHO"
 }
 
+func (c CmdEcho) ErrWrap(input error) (err error) {
+	if input != nil {
+		err = fmt.Errorf("failed to run %q command: %w", c.Name(), input)
+	}
+	return
+}
+
 func (e CmdEcho) Exec(
-	args rheltypes.RhelType,
+	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	log.Println(e.Name(), args.String())
-	var ok bool
-	switch v := args.(type) {
-	case rheltypes.Array:
-		if value, ok = v.At(1); !ok {
-			err = fmt.Errorf("expected 2 values, got %d", len(v))
-		}
-	default:
-		err = fmt.Errorf("expected %T, got %T", rheltypes.Array{}, v)
+	value = args.First()
+	if value == nil {
+		err = e.ErrWrap(fmt.Errorf("expected message"))
 	}
 	return
 }

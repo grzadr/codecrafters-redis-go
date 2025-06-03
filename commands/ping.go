@@ -14,7 +14,7 @@ func (CmdPing) Name() string {
 	return "PING"
 }
 
-func (CmdPing) Exec(value rheltypes.RhelType) (rheltypes.RhelType, error) {
+func (CmdPing) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
 	log.Println("Ping")
 	return rheltypes.SimpleString("PONG"), nil
 }

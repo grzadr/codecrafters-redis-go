@@ -13,7 +13,7 @@
     "files.trimTrailingWhitespace": true,
     "files.insertFinalNewline": true,
     "files.autoSave": "afterDelay",
-    "files.autoSaveDelay": 500,
+    "files.autoSaveDelay": 100,
     "files.associations": {
         ".env": "shellscript",
         "*.sh": "shellscript",

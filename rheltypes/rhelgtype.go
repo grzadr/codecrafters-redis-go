@@ -37,7 +37,7 @@ func (e PrefixError) Error() string {
 		e.expected, e.detected)
 }
 
-func NewPrefixError(expected rhelPrefix, detected rhelPrefix) error {
+func NewPrefixError(expected, detected rhelPrefix) error {
 	return PrefixError{expected: expected, detected: detected}
 }
 
