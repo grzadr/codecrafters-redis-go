@@ -1,7 +1,12 @@
 package commands
 
-import "github.com/codecrafters-io/redis-starter-go/rheltypes"
+import (
+	"log"
 
-func CmdEcho(content string) (rheltypes.RhelType, error) {
-	return rheltypes.BulkString(content), nil
+	"github.com/codecrafters-io/redis-starter-go/rheltypes"
+)
+
+func RunEcho(content []rheltypes.RhelType) (rheltypes.RhelType, error) {
+	log.Printf("Echo %q", content)
+	return rheltypes.Array(content), nil
 }

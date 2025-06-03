@@ -1,7 +1,12 @@
 package commands
 
-import "github.com/codecrafters-io/redis-starter-go/rheltypes"
+import (
+	"log"
 
-func CmdPing() (rheltypes.RhelType, error) {
+	"github.com/codecrafters-io/redis-starter-go/rheltypes"
+)
+
+func RunPing() (rheltypes.RhelType, error) {
+	log.Println("Ping")
 	return rheltypes.SimpleString("PONG"), nil
 }

@@ -46,16 +46,15 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 		output, err := commands.ExecuteCommand(buf[:n])
 		if err != nil {
 			errCh <- fmt.Errorf("error during cmd execution: %w", err)
-		}
-
-		if output == nil {
+		} else if output == nil {
 			errCh <- fmt.Errorf("missing command output")
+		} else if _, err := conn.Write(output.Serialize()); err != nil {
+			errCh <- fmt.Errorf("error sending data: %w", err)
+		} else {
+			continue
 		}
 
-		if _, err := conn.Write(output.Serialize()); err != nil {
-			errCh <- fmt.Errorf("error sending data: %w", err)
-		}
-		// conn.CloseWrite()
+		break
 	}
 }
 
