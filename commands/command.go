@@ -3,7 +3,6 @@ package commands
 import (
 	"encoding/hex"
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
@@ -88,8 +87,6 @@ func parseCommand(
 }
 
 func ExecuteCommand(command []byte) (result rheltypes.RhelType, err error) {
-	log.Printf("Command %q:\n%s", command, hex.Dump(command))
-
 	cmd, args, err := parseCommand(command)
 	if err != nil {
 		return nil, NewCommandError(command, err)

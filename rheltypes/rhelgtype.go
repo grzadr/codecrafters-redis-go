@@ -10,6 +10,7 @@ type RhelType interface {
 	isRhelType()
 	Serialize() []byte
 	String() string
+	Integer() (int, error)
 	Size() int
 	First() RhelType
 }
@@ -20,10 +21,12 @@ var (
 	SimpleStringPrefix = rhelPrefix("+")
 	BulkStringPrefix   = rhelPrefix("$")
 	ArrayPrefix        = rhelPrefix("*")
+	IntegerPrefix      = rhelPrefix(":")
 	rhelPrefixIndex    = []rhelPrefix{
 		SimpleStringPrefix,
 		BulkStringPrefix,
 		ArrayPrefix,
+		IntegerPrefix,
 	}
 )
 
@@ -49,6 +52,8 @@ func RhelEncode(iter *TokenIterator) (RhelType, error) {
 		return NewSimpleString(iter)
 	case BulkStringPrefix:
 		return NewBulkString(iter)
+	case IntegerPrefix:
+		return NewInteger(iter)
 	default:
 		return nil, fmt.Errorf("unknown prefix %s", string(p))
 	}

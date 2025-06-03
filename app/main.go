@@ -42,7 +42,6 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 				errCh <- err
 			}
 		}
-		log.Println(string(buf[:n]))
 		output, err := commands.ExecuteCommand(buf[:n])
 		if err != nil {
 			errCh <- fmt.Errorf("error during cmd execution: %w", err)

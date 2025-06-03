@@ -2,11 +2,17 @@ package rheltypes
 
 import (
 	"sync"
+	"time"
 )
+
+type RhelMapValue struct {
+	Value      RhelType
+	Expiration int64
+}
 
 type SafeMap struct {
 	mu   sync.RWMutex
-	data map[string]RhelType
+	data map[string]RhelMapValue
 }
 
 var (
@@ -17,7 +23,7 @@ var (
 func GetSageMapInstance() *SafeMap {
 	once.Do(func() {
 		instance = &SafeMap{
-			data: make(map[string]RhelType, 1024),
+			data: make(map[string]RhelMapValue, 1024),
 		}
 	})
 	return instance
@@ -25,15 +31,33 @@ func GetSageMapInstance() *SafeMap {
 
 func (sm *SafeMap) Set(key string, value RhelType) {
 	sm.mu.Lock()
-	sm.data[key] = value
+	sm.data[key] = RhelMapValue{Value: value}
 	sm.mu.Unlock()
 }
 
-func (sm *SafeMap) Get(key string) (RhelType, bool) {
+func (sm *SafeMap) SetToExpire(key string, value RhelType, px int64) {
+	sm.mu.Lock()
+	d := time.Duration(px) * time.Millisecond
+	sm.data[key] = RhelMapValue{
+		Value:      value,
+		Expiration: time.Now().Add(d).UnixMilli(),
+	}
+	sm.mu.Unlock()
+}
+
+func (sm *SafeMap) Get(key string) (value RhelType, found bool) {
 	sm.mu.RLock()
-	value, exists := sm.data[key]
+	valueRaw, found := sm.data[key]
+	if found && valueRaw.Expiration > 0 &&
+		time.Now().UnixMilli() >= valueRaw.Expiration {
+		delete(sm.data, key)
+		value = nil
+		found = false
+	} else {
+		value = valueRaw.Value
+	}
 	sm.mu.RUnlock()
-	return value, exists
+	return
 }
 
 func (sm *SafeMap) Delete(key string) bool {

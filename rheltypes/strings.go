@@ -41,6 +41,10 @@ func (s SimpleString) First() RhelType {
 	return s
 }
 
+func (s SimpleString) Integer() (num int, err error) {
+	return strconv.Atoi(string(s))
+}
+
 type BulkString struct {
 	Length int
 	Text   string
@@ -80,7 +84,13 @@ func (s BulkString) Size() int {
 func (s BulkString) Serialize() []byte {
 	buf := make([]byte, 0, s.Size())
 
-	return fmt.Appendf(buf, "$%s\r\n%s\r\n", strconv.Itoa(s.Length), s)
+	buf = fmt.Appendf(buf, "%s%s\r\n", BulkStringPrefix, strconv.Itoa(s.Length))
+
+	if s.Length > -1 {
+		buf = fmt.Appendf(buf, "%s\r\n", s.Text)
+	}
+
+	return buf
 }
 
 func (s BulkString) String() string {
@@ -93,4 +103,8 @@ func (s BulkString) First() RhelType {
 
 func NewNullBulkString() BulkString {
 	return BulkString{Length: -1}
+}
+
+func (s BulkString) Integer() (num int, err error) {
+	return strconv.Atoi(string(s.Text))
 }

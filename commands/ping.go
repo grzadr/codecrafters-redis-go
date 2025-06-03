@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"log"
-
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -15,6 +13,5 @@ func (CmdPing) Name() string {
 }
 
 func (CmdPing) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
-	log.Println("Ping")
 	return rheltypes.SimpleString("PONG"), nil
 }

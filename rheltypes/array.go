@@ -2,7 +2,6 @@ package rheltypes
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 )
@@ -10,8 +9,6 @@ import (
 type Array []RhelType
 
 func NewArray(tokens *TokenIterator) (Array, error) {
-	log.Printf("Array %s\n", tokens.Dump())
-
 	size, err := tokens.NextSize(ArrayPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create array: %w", err)
@@ -26,7 +23,6 @@ func NewArray(tokens *TokenIterator) (Array, error) {
 			output = append(output, value)
 		}
 	}
-	log.Printf("Array constructed: %v\n", output)
 
 	return output, nil
 }
@@ -80,3 +76,5 @@ func (a Array) At(index int) RhelType {
 		return nil
 	}
 }
+
+func (a Array) Integer() (int, error) { return 0, nil }
