@@ -17,6 +17,10 @@ formatters:
       # Choose whether to use the extra rules.
       # Default: false
       extra-rules: true
+    gofmt:
+      rewrite-rules:
+        - pattern: 'interface{}'
+          replacement: 'any'
 
     # goimports:
     #   # A list of prefixes, which, if set, checks import paths

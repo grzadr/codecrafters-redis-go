@@ -21,12 +21,12 @@ func (c CmdEcho) ErrWrap(input error) (err error) {
 	return
 }
 
-func (e CmdEcho) Exec(
+func (c CmdEcho) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
 	value = args.First()
 	if value == nil {
-		err = e.ErrWrap(fmt.Errorf("expected message"))
+		err = c.ErrWrap(fmt.Errorf("expected message"))
 	}
 	return
 }

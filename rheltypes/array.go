@@ -71,12 +71,12 @@ func (a Array) First() RhelType {
 	return a[0]
 }
 
-func (a Array) At(index int) (RhelType, bool) {
+func (a Array) At(index int) RhelType {
 	if index < 0 {
 		return a.At(len(a) + index)
 	} else if index < len(a) {
-		return a[index], true
+		return a[index]
 	} else {
-		return nil, false
+		return nil
 	}
 }

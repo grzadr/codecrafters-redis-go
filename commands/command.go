@@ -51,6 +51,10 @@ func NewRhelCommand(
 		return CmdPing{}
 	case "ECHO":
 		return CmdEcho{}
+	case "SET":
+		return CmdSet{}
+	case "GET":
+		return CmdGet{}
 	default:
 		return UnknownCommand(name)
 	}

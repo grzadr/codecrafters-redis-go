@@ -24,18 +24,7 @@ func NewSimpleString(iter *TokenIterator) (SimpleString, error) {
 func (s SimpleString) isRhelType() {}
 
 func (s SimpleString) Size() int {
-	size := len(s)
-	sizeStr := strconv.Itoa(size)
-
-	return len(
-		SimpleStringPrefix,
-	) + len(
-		sizeStr,
-	) + len(
-		rhelFieldSep,
-	) + size + len(
-		rhelFieldSep,
-	)
+	return len(s) + len(SimpleStringPrefix) + len(rhelFieldSep)
 }
 
 func (s SimpleString) Serialize() []byte {
@@ -52,50 +41,56 @@ func (s SimpleString) First() RhelType {
 	return s
 }
 
-type BulkString string
+type BulkString struct {
+	Length int
+	Text   string
+}
 
 func NewBulkString(tokens *TokenIterator) (s BulkString, err error) {
 	size, err := tokens.NextSize(BulkStringPrefix)
 	if err != nil {
-		return "", fmt.Errorf("failed to create bulk string: %w", err)
+		return s, fmt.Errorf("failed to create bulk string: %w", err)
 	}
-
-	if valueToken, ok := tokens.Next(); !ok {
-		return "", fmt.Errorf(
+	valueToken, ok := tokens.Next()
+	if !ok {
+		return s, fmt.Errorf(
 			"failed to create bulk string: failed to read value token",
 		)
-	} else {
-		s = BulkString(valueToken)
 	}
-
-	if sSize := len(s); size != sSize {
-		return "", fmt.Errorf(
-			"failed to create bulk string: expected %q to have size %d, has %d",
-			s,
-			size,
-			sSize,
-		)
-	}
-
+	s = BulkString{Length: size, Text: string(valueToken)}
 	return
 }
 
 func (s BulkString) isRhelType() {}
 
 func (s BulkString) Size() int {
-	return len(s) + len(SimpleStringPrefix) + 2
+	sizeStr := strconv.Itoa(s.Length)
+
+	return len(
+		SimpleStringPrefix,
+	) + len(
+		sizeStr,
+	) + len(
+		rhelFieldSep,
+	) + max(s.Length, 0) + len(
+		rhelFieldSep,
+	)
 }
 
 func (s BulkString) Serialize() []byte {
 	buf := make([]byte, 0, s.Size())
 
-	return fmt.Appendf(buf, "$%s\r\n%s\r\n", strconv.Itoa(len(s)), s)
+	return fmt.Appendf(buf, "$%s\r\n%s\r\n", strconv.Itoa(s.Length), s)
 }
 
 func (s BulkString) String() string {
-	return string(s)
+	return string(s.Text)
 }
 
 func (s BulkString) First() RhelType {
 	return s
+}
+
+func NewNullBulkString() BulkString {
+	return BulkString{Length: -1}
 }
