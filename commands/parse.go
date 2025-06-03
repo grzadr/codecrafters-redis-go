@@ -4,62 +4,89 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
+type ContentError struct {
+	content []byte
+	message error
+}
+
+func (e ContentError) Error() string {
+	return fmt.Sprintf("malformed content %q: %s\n%s",
+		string(e.content), e.message, hex.Dump(e.content))
+}
+
+func NewContentError(content []byte, message error) error {
+	return ContentError{content: content, message: message}
+}
+
 type RhelCommand interface {
 	isRhelCommand()
-	String() string
+	Name() string
+	Exec(rheltypes.RhelType) (rheltypes.RhelType, error)
 }
 
-type rhelCommand struct {
-	Cmd string
+type UnknownCommand string
+
+func (UnknownCommand) isRhelCommand() {}
+
+func (c UnknownCommand) Name() string {
+	return string(c)
 }
 
-func (c rhelCommand) isRhelCommand() {}
-
-func (c rhelCommand) String() string {
-	return c.Cmd
+func (c UnknownCommand) Exec(
+	value rheltypes.RhelType,
+) (rheltypes.RhelType, error) {
+	return nil, fmt.Errorf("command not found %s", c.Name())
 }
 
-var (
-	CmdUnknown = rhelCommand{}
-	CmdPing    = rhelCommand{Cmd: "PING"}
-	CmdEcho    = rhelCommand{Cmd: "ECHO"}
-)
+var commands = map[string]RhelCommand{
+	"PING": CmdPing{},
+	"ECHO": CmdEcho{},
+}
 
-func cleanCommand(cmd rheltypes.RhelType) RhelCommand {
-	switch cmd.String() {
-	case "PING":
-		return CmdPing
-	case "ECHO":
-		return CmdEcho
-	default:
-		return CmdUnknown
+func NewRhelCommand(
+	value rheltypes.RhelType,
+) (cmd RhelCommand) {
+	cmdStr := strings.ToUpper(value.First().String())
+	var found bool
+
+	if cmd, found = commands[cmdStr]; !found {
+		return UnknownCommand(cmdStr)
 	}
+
+	return
 }
 
-func ExecuteCommand(content []byte) (rheltypes.RhelType, error) {
+func ExecuteCommand(content []byte) (result rheltypes.RhelType, err error) {
 	log.Printf("Command %q:\n%s", content, hex.Dump(content))
-	if len(content) == 0 {
-		return nil, fmt.Errorf("missing command")
-	}
-
-	items, err := rheltypes.NewArray(content)
+	tokens, err := rheltypes.NewTokenIterator(content)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf(
+			"tokenization error: %w",
+			NewContentError(content, err),
+		)
 	}
 
-	cmd := items[0]
-	rest := items[1:]
-
-	switch cleanCommand(cmd) {
-	case CmdPing:
-		return RunPing()
-	case CmdEcho:
-		return RunEcho(rest)
-	default:
-		return nil, fmt.Errorf("unknown command %s", cmd)
+	value, err := rheltypes.RhelEncode(tokens)
+	if err != nil {
+		return nil, NewContentError(
+			content,
+			fmt.Errorf("encoding error: %w", err),
+		)
 	}
+	cmd := NewRhelCommand(value)
+	result, err = cmd.Exec(value)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"command %s execution error: %w",
+			cmd.Name(),
+			NewContentError(content, err),
+		)
+	}
+
+	return
 }

@@ -1,8 +1,6 @@
 package rheltypes
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"strconv"
@@ -11,58 +9,23 @@ import (
 
 type Array []RhelType
 
-func NewArray(content []byte) (Array, error) {
-	log.Printf("Array %q:\n%s\n", content, hex.Dump(content))
-	data, err := cutRhelPrefix(content, ArrayPrefix)
+func NewArray(tokens *TokenIterator) (Array, error) {
+	log.Printf("Array %s\n", tokens.Dump())
+
+	size, err := tokens.NextSize(ArrayPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create array: %w", err)
 	}
 
-	sizeBytes, elements, found := bytes.Cut(data, rhelFieldSep)
-
-	if !found {
-		return nil, NewContentError(content)
-	}
-
-	size, err := strconv.Atoi(string(sizeBytes))
-	if err != nil {
-		return nil, fmt.Errorf(
-			"failed to convert %s into number",
-			string(sizeBytes),
-		)
-	}
-
 	output := make(Array, 0, size)
-	var itemBytes []byte
-	var item RhelType
+
 	for range size {
-		itemBytes, elements, found = bytes.Cut(elements, rhelFieldSep)
-		if !found {
-			return nil, fmt.Errorf(
-				"missing expected field separator in %s (% x)",
-				string(content),
-				content,
-			)
+		if value, err := RhelEncode(tokens); err != nil {
+			return nil, fmt.Errorf("failed to create array: %w", err)
+		} else {
+			output = append(output, value)
 		}
-		if item, err = RhelSerialize(content); err != nil {
-			return nil, fmt.Errorf(
-				"failed to serialize %s (% x)",
-				string(itemBytes),
-				itemBytes,
-			)
-		}
-		output = append(output, item)
 	}
-
-	if len(elements) > 0 {
-		return nil, fmt.Errorf(
-			"unprocessed content left from %s: %s (% x)",
-			string(content),
-			string(elements),
-			elements,
-		)
-	}
-
 	log.Printf("Array constructed: %v\n", output)
 
 	return output, nil
@@ -99,4 +62,21 @@ func (a Array) String() string {
 		buf = append(buf, i.String())
 	}
 	return strings.Join(buf, ", ")
+}
+
+func (a Array) First() RhelType {
+	if len(a) == 0 {
+		return nil
+	}
+	return a[0]
+}
+
+func (a Array) At(index int) (RhelType, bool) {
+	if index < 0 {
+		return a.At(len(a) + index)
+	} else if index < len(a) {
+		return a[index], true
+	} else {
+		return nil, false
+	}
 }

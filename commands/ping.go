@@ -6,7 +6,15 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
-func RunPing() (rheltypes.RhelType, error) {
+type CmdPing struct{}
+
+func (CmdPing) isRhelCommand() {}
+
+func (CmdPing) Name() string {
+	return "PING"
+}
+
+func (CmdPing) Exec(value rheltypes.RhelType) (rheltypes.RhelType, error) {
 	log.Println("Ping")
 	return rheltypes.SimpleString("PONG"), nil
 }

@@ -1,19 +1,24 @@
 package rheltypes
 
 import (
-	"bytes"
 	"fmt"
 	"strconv"
 )
 
 type SimpleString string
 
-func NewSimpleString(content []byte) (SimpleString, error) {
-	after, found := bytes.CutPrefix(content, SimpleStringPrefix)
-	if !found {
-		return "", PrefixError{Content: content, Prefix: SimpleStringPrefix}
+func NewSimpleString(iter *TokenIterator) (SimpleString, error) {
+	first, ok := iter.Read(1)
+	if !ok {
+		return "", fmt.Errorf("failed to read value token")
 	}
-	return SimpleString(string(after)), nil
+
+	value, found := first[0].CutPrefix(SimpleStringPrefix)
+	if !found {
+		return "", NewPrefixError(SimpleStringPrefix, rhelPrefix(first[0]))
+	}
+
+	return SimpleString(string(value)), nil
 }
 
 func (s SimpleString) isRhelType() {}
@@ -43,22 +48,36 @@ func (s SimpleString) String() string {
 	return string(s)
 }
 
+func (s SimpleString) First() RhelType {
+	return s
+}
+
 type BulkString string
 
-func NewBulkString(content []byte) (BulkString, error) {
-	data, found := bytes.CutPrefix(content, BulkStringPrefix)
-	if !found {
-		return "", PrefixError{Content: content, Prefix: BulkStringPrefix}
-	}
-	_, data, found = bytes.Cut(data, rhelFieldSep)
-
-	if !found {
-		return "", ContentError(content)
+func NewBulkString(tokens *TokenIterator) (s BulkString, err error) {
+	size, err := tokens.NextSize(BulkStringPrefix)
+	if err != nil {
+		return "", fmt.Errorf("failed to create bulk string: %w", err)
 	}
 
-	data, _ = bytes.CutSuffix(data, rhelFieldSep)
+	if valueToken, ok := tokens.Next(); !ok {
+		return "", fmt.Errorf(
+			"failed to create bulk string: failed to read value token",
+		)
+	} else {
+		s = BulkString(valueToken)
+	}
 
-	return BulkString(data), nil
+	if sSize := len(s); size != sSize {
+		return "", fmt.Errorf(
+			"failed to create bulk string: expected %q to have size %d, has %d",
+			s,
+			size,
+			sSize,
+		)
+	}
+
+	return
 }
 
 func (s BulkString) isRhelType() {}
@@ -75,4 +94,8 @@ func (s BulkString) Serialize() []byte {
 
 func (s BulkString) String() string {
 	return string(s)
+}
+
+func (s BulkString) First() RhelType {
+	return s
 }

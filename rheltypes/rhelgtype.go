@@ -1,8 +1,6 @@
 package rheltypes
 
 import (
-	"bytes"
-	"encoding/hex"
 	"fmt"
 )
 
@@ -13,65 +11,45 @@ type RhelType interface {
 	Serialize() []byte
 	String() string
 	Size() int
+	First() RhelType
 }
 
-type rhelPrefix []byte
+type rhelPrefix string
 
 var (
 	SimpleStringPrefix = rhelPrefix("+")
 	BulkStringPrefix   = rhelPrefix("$")
 	ArrayPrefix        = rhelPrefix("*")
+	rhelPrefixIndex    = []rhelPrefix{
+		SimpleStringPrefix,
+		BulkStringPrefix,
+		ArrayPrefix,
+	}
 )
 
-func RhelSerialize(content []byte) (RhelType, error) {
-	switch content[0] {
-	case '*':
-		return NewArray(content)
-	case '+':
-		return NewSimpleString(content)
-	case '$':
-		return NewBulkString(content)
-	default:
-		return nil, fmt.Errorf(
-			"unknown type '%s': %s",
-			string(content[0]),
-			string(content),
-		)
-	}
-}
-
 type PrefixError struct {
-	Content []byte
-	Prefix  rhelPrefix
+	expected rhelPrefix
+	detected rhelPrefix
 }
 
 func (e PrefixError) Error() string {
-	return fmt.Sprintf("missing expected prefix %q in %q:\n%s",
-		e.Prefix, e.Content, hex.Dump(e.Content))
+	return fmt.Sprintf("expected prefix %q, got %q",
+		e.expected, e.detected)
 }
 
-func NewPrefixError(content []byte, prefix rhelPrefix) error {
-	return PrefixError{Content: content, Prefix: prefix}
+func NewPrefixError(expected rhelPrefix, detected rhelPrefix) error {
+	return PrefixError{expected: expected, detected: detected}
 }
 
-type ContentError []byte
-
-func (e ContentError) Error() string {
-	return fmt.Sprintf("malformed content %q:\n%s",
-		string(e), hex.Dump(e))
-}
-
-func NewContentError(content []byte) error {
-	return ContentError(content)
-}
-
-func cutRhelPrefix(
-	content []byte,
-	prefix rhelPrefix,
-) (clean []byte, err error) {
-	var found bool
-	if clean, found = bytes.CutPrefix(content, prefix); !found {
-		err = NewPrefixError(content, prefix)
+func RhelEncode(iter *TokenIterator) (RhelType, error) {
+	switch p := iter.Current().Prefix(); p {
+	case ArrayPrefix:
+		return NewArray(iter)
+	case SimpleStringPrefix:
+		return NewSimpleString(iter)
+	case BulkStringPrefix:
+		return NewBulkString(iter)
+	default:
+		return nil, fmt.Errorf("unknown prefix %s", string(p))
 	}
-	return
 }
