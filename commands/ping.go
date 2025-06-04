@@ -6,8 +6,6 @@ import (
 
 type CmdPing struct{}
 
-func (CmdPing) isRhelCommand() {}
-
 func (CmdPing) Name() string {
 	return "PING"
 }
@@ -15,3 +13,5 @@ func (CmdPing) Name() string {
 func (CmdPing) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
 	return rheltypes.SimpleString("PONG"), nil
 }
+
+func (CmdPing) isRhelCommand() {}

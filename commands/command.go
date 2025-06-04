@@ -25,12 +25,10 @@ func NewCommandError(content []byte, message error) error {
 type RhelCommand interface {
 	isRhelCommand()
 	Name() string
-	Exec(rheltypes.Array) (rheltypes.RhelType, error)
+	Exec(args rheltypes.Array) (rheltypes.RhelType, error)
 }
 
 type UnknownCommand string
-
-func (UnknownCommand) isRhelCommand() {}
 
 func (c UnknownCommand) Name() string {
 	return string(c)
@@ -41,6 +39,8 @@ func (c UnknownCommand) Exec(
 ) (rheltypes.RhelType, error) {
 	return nil, fmt.Errorf("command %q not found", c.Name())
 }
+
+func (UnknownCommand) isRhelCommand() {}
 
 func NewRhelCommand(
 	name string,
@@ -66,6 +66,7 @@ func parseCommand(
 		if newErr != nil {
 			return fmt.Errorf("error in parseCommand: %w", newErr)
 		}
+
 		return nil
 	}
 	tokens, err := rheltypes.NewTokenIterator(command)
@@ -96,5 +97,6 @@ func ExecuteCommand(command []byte) (result rheltypes.RhelType, err error) {
 	if err != nil {
 		return nil, NewCommandError(command, err)
 	}
+
 	return
 }

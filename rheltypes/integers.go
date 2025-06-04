@@ -12,6 +12,7 @@ func NewInteger(tokens *TokenIterator) (i Integer, err error) {
 		if err != nil {
 			return fmt.Errorf("failed to create integer: %w", err)
 		}
+
 		return nil
 	}
 	numToken, ok := tokens.Next()
@@ -32,11 +33,11 @@ func NewInteger(tokens *TokenIterator) (i Integer, err error) {
 			fmt.Errorf("failed to convert integer %q: %w", numToken, err),
 		)
 	}
+
 	i = Integer(value)
+
 	return
 }
-
-func (Integer) isRhelType() {}
 
 func (i Integer) Size() int {
 	sizeStr := strconv.Itoa(int(i))
@@ -67,3 +68,5 @@ func (i Integer) First() RhelType {
 func (i Integer) Integer() (int, error) {
 	return int(i), nil
 }
+
+func (Integer) isRhelType() {}

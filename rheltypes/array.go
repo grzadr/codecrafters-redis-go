@@ -27,13 +27,12 @@ func NewArray(tokens *TokenIterator) (Array, error) {
 	return output, nil
 }
 
-func (a Array) isRhelType() {}
-
 func (a Array) Size() int {
 	size := 0
 	for _, i := range a {
 		size += i.Size()
 	}
+
 	sizeStr := len(strconv.Itoa(len(a)))
 
 	return len(ArrayPrefix) + sizeStr + len(rhelFieldSep) + size
@@ -57,6 +56,7 @@ func (a Array) String() string {
 	for _, i := range a {
 		buf = append(buf, i.String())
 	}
+
 	return strings.Join(buf, ", ")
 }
 
@@ -64,6 +64,7 @@ func (a Array) First() RhelType {
 	if len(a) == 0 {
 		return nil
 	}
+
 	return a[0]
 }
 
@@ -78,3 +79,5 @@ func (a Array) At(index int) RhelType {
 }
 
 func (a Array) Integer() (int, error) { return 0, nil }
+
+func (a Array) isRhelType() {}

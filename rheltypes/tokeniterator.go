@@ -15,6 +15,7 @@ func (t Token) Prefix() rhelPrefix {
 			return p
 		}
 	}
+
 	return rhelPrefix(t)
 }
 
@@ -50,6 +51,7 @@ func NewTokenIterator(content []byte) (*TokenIterator, error) {
 	if !found {
 		return nil, fmt.Errorf("expected % x terminator", rhelFieldSep)
 	}
+
 	items := bytes.Split(data, rhelFieldSep)
 
 	if len(items) == 0 {
@@ -76,6 +78,7 @@ func (i *TokenIterator) Skip(size int) bool {
 	}
 
 	i.index += size
+
 	return true
 }
 
@@ -84,9 +87,10 @@ func (i TokenIterator) Current() Token {
 }
 
 func (i *TokenIterator) Read(size int) (tokens []Token, ok bool) {
-	if ok = i.Skip(2); !ok {
+	if ok = i.Skip(size); !ok {
 		return
 	}
+
 	data := (i.content[i.index-size : i.index])
 
 	tokens = make([]Token, len(data))
@@ -102,6 +106,7 @@ func (i *TokenIterator) Next() (token Token, ok bool) {
 	if ok = i.Skip(1); !ok {
 		return
 	}
+
 	token = Token(i.content[i.index-1])
 
 	return
@@ -112,6 +117,7 @@ func (i *TokenIterator) NextSize(prefix rhelPrefix) (size int, err error) {
 	if !ok {
 		return 0, fmt.Errorf("failed to read size token")
 	}
+
 	return sizeToken.ReadSize(prefix)
 }
 
@@ -121,6 +127,7 @@ func (i TokenIterator) Content() []byte {
 
 func (i TokenIterator) Dump() string {
 	data := i.Content()
+
 	return fmt.Sprintf(
 		"index: %d | %q\n%s",
 		i.index,

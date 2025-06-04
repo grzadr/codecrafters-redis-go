@@ -9,6 +9,11 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/commands"
 )
 
+const (
+	DEFAULT_TCP_BUFFER           = 4096
+	DEFAULT_ERR_CHANNEL_CAPACITY = 4
+)
+
 func connectTcp(address string) *net.TCPListener {
 	ip, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
@@ -30,10 +35,13 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 		}
 	}()
 
-	buf := make([]byte, 4096)
+	buf := make([]byte, DEFAULT_TCP_BUFFER)
+
 	var err error
+
 	for {
 		n := 0
+
 		if n, err = conn.Read(buf); err != nil {
 			switch err {
 			case io.EOF:
@@ -42,6 +50,7 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 				errCh <- err
 			}
 		}
+
 		output, err := commands.ExecuteCommand(buf[:n])
 		if err != nil {
 			errCh <- fmt.Errorf("error during cmd execution: %w", err)
@@ -60,7 +69,7 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 func main() {
 	l := connectTcp("0.0.0.0:6379")
 
-	errCh := make(chan error, 4)
+	errCh := make(chan error, DEFAULT_ERR_CHANNEL_CAPACITY)
 
 	go func() {
 		for err := range errCh {
@@ -73,6 +82,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Error accepting connection: %s\n", err)
 		}
+
 		go handleConn(conn, errCh)
 	}
 }

@@ -1,4 +1,20 @@
 version: "2"
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 3
+  new: false
+  fix: true
+  uniq-by-line: true
+  whole-files: false
+linters:
+  default: all
+  settings:
+    depguard:
+      rules:
+        main:
+          allow:
+            - $gostd
+            - github.com/codecrafters-io/redis-starter-go
 formatters:
   # Enable specific formatter.
   # Default: [] (uses standard Go formatting)
@@ -19,8 +35,8 @@ formatters:
       extra-rules: true
     gofmt:
       rewrite-rules:
-        - pattern: 'interface{}'
-          replacement: 'any'
+        - pattern: "interface{}"
+          replacement: "any"
 
     # goimports:
     #   # A list of prefixes, which, if set, checks import paths
