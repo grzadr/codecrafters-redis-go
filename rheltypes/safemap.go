@@ -28,12 +28,12 @@ var (
 	once     sync.Once
 )
 
-const DEFAULT_MAP_CAPACITY = 1024
+const defaultMapCapacity = 1024
 
-func GetSageMapInstance() *SafeMap {
+func GetSafeMapInstance() *SafeMap {
 	once.Do(func() {
 		instance = &SafeMap{
-			data: make(map[string]RhelMapValue, DEFAULT_MAP_CAPACITY),
+			data: make(map[string]RhelMapValue, defaultMapCapacity),
 		}
 	})
 
@@ -48,10 +48,9 @@ func (sm *SafeMap) Set(key string, value RhelType) {
 
 func (sm *SafeMap) SetToExpire(key string, value RhelType, px int64) {
 	sm.mu.Lock()
-	d := time.Duration(px) * time.Millisecond
 	sm.data[key] = RhelMapValue{
 		Value:      value,
-		Expiration: time.Now().Add(d).UnixMilli(),
+		Expiration: currentTime() + px,
 	}
 	sm.mu.Unlock()
 }
