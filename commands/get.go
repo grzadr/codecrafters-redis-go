@@ -28,7 +28,7 @@ func (c CmdGet) Exec(
 		return nil, c.ErrWrap(fmt.Errorf("missing key"))
 	}
 
-	instance := rheltypes.GetSageMapInstance()
+	instance := rheltypes.GetSafeMapInstance()
 
 	var found bool
 

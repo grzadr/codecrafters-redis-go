@@ -91,7 +91,7 @@ func (c CmdSet) Exec(
 		return nil, c.ErrWrap(err)
 	}
 
-	instance := rheltypes.GetSageMapInstance()
+	instance := rheltypes.GetSafeMapInstance()
 
 	if parsedArgs.Px > 0 {
 		instance.SetToExpire(
