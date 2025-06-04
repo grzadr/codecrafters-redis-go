@@ -5,9 +5,17 @@ import (
 	"time"
 )
 
+func currentTime() int64 {
+	return time.Now().UnixMilli()
+}
+
 type RhelMapValue struct {
 	Value      RhelType
 	Expiration int64
+}
+
+func (v RhelMapValue) IsExpired() bool {
+	return v.Expiration > 0 && currentTime() >= v.Expiration
 }
 
 type SafeMap struct {
@@ -48,24 +56,14 @@ func (sm *SafeMap) SetToExpire(key string, value RhelType, px int64) {
 	sm.mu.Unlock()
 }
 
-func checkIsExpired(expiration int64) bool {
-	return expiration > 0 && time.Now().UnixMilli() >= expiration
-}
-
 func (sm *SafeMap) Get(key string) (value RhelType, found bool) {
-	sm.mu.RLock()
+	valueRaw, found := sm.getValue(key)
 
-	valueRaw, found := sm.data[key]
-	value = valueRaw.Value
-	sm.mu.RUnlock()
-
-	if found && checkIsExpired(valueRaw.Expiration) {
-		sm.Delete(key)
-
+	if found && valueRaw.IsExpired() && sm.deleteExpired(key) {
 		return nil, false
 	}
 
-	return
+	return valueRaw.Value, found
 }
 
 func (sm *SafeMap) Delete(key string) bool {
@@ -78,4 +76,27 @@ func (sm *SafeMap) Delete(key string) bool {
 	}
 
 	return exists
+}
+
+func (sm *SafeMap) deleteExpired(key string) (deleted bool) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	v, found := sm.data[key]
+
+	if found && v.IsExpired() {
+		delete(sm.data, key)
+
+		deleted = true
+	}
+
+	return
+}
+
+func (sm *SafeMap) getValue(key string) (value RhelMapValue, found bool) {
+	sm.mu.RLock()
+	defer sm.mu.RUnlock()
+	value, found = sm.data[key]
+
+	return
 }
