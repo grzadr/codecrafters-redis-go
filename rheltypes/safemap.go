@@ -54,26 +54,27 @@ func (sm *SafeMap) Get(key string) (value RhelType, found bool) {
 	valueRaw, found := sm.data[key]
 	if found && valueRaw.Expiration > 0 &&
 		time.Now().UnixMilli() >= valueRaw.Expiration {
-		delete(sm.data, key)
+		sm.mu.RUnlock()
+		sm.Delete(key)
 
 		value = nil
 		found = false
 	} else {
 		value = valueRaw.Value
+		sm.mu.RUnlock()
 	}
-	sm.mu.RUnlock()
 
 	return
 }
 
 func (sm *SafeMap) Delete(key string) bool {
 	sm.mu.Lock()
+	defer sm.mu.Unlock()
 
 	_, exists := sm.data[key]
 	if exists {
 		delete(sm.data, key)
 	}
-	sm.mu.Unlock()
 
 	return exists
 }
