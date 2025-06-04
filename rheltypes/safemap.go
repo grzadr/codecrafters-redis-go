@@ -48,20 +48,21 @@ func (sm *SafeMap) SetToExpire(key string, value RhelType, px int64) {
 	sm.mu.Unlock()
 }
 
+func checkIsExpired(expiration int64) bool {
+	return expiration > 0 && time.Now().UnixMilli() >= expiration
+}
+
 func (sm *SafeMap) Get(key string) (value RhelType, found bool) {
 	sm.mu.RLock()
 
 	valueRaw, found := sm.data[key]
-	if found && valueRaw.Expiration > 0 &&
-		time.Now().UnixMilli() >= valueRaw.Expiration {
-		sm.mu.RUnlock()
+	value = valueRaw.Value
+	sm.mu.RUnlock()
+
+	if found && checkIsExpired(valueRaw.Expiration) {
 		sm.Delete(key)
 
-		value = nil
-		found = false
-	} else {
-		value = valueRaw.Value
-		sm.mu.RUnlock()
+		return nil, false
 	}
 
 	return
