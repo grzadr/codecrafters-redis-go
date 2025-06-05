@@ -81,7 +81,7 @@ func (c BaseCommand) ErrWrap(input error) (err error) {
 func (c BaseCommand) Exec(
 	value rheltypes.Array,
 ) (rheltypes.RhelType, error) {
-	return nil, fmt.Errorf("command %q not found", c.Name())
+	return nil, c.ErrWrap(fmt.Errorf("command %q not found", c.Name()))
 }
 
 func (BaseCommand) isRhelCommand() {}
@@ -92,6 +92,7 @@ var commandMap = map[string]func() RhelCommand{
 	"SET":    func() RhelCommand { return NewCmdSet() },
 	"GET":    func() RhelCommand { return NewCmdGet() },
 	"CONFIG": func() RhelCommand { return NewCmdConfig() },
+	"KEYS":   func() RhelCommand { return NewCmdKeys() },
 }
 
 func NewRhelCommand(name string) RhelCommand {

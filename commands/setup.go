@@ -1,9 +1,11 @@
 package commands
 
 import (
+	"encoding/hex"
 	"flag"
 	"log"
 	"os"
+	"path"
 	"reflect"
 	"strings"
 
@@ -40,6 +42,14 @@ func NewConfigArgs() (conf *ConfigArgs) {
 	return
 }
 
+func (conf *ConfigArgs) IsDirSet() bool {
+	return conf.Dir.set
+}
+
+func (conf *ConfigArgs) IsDbFilenameSet() bool {
+	return conf.DbFilename.set
+}
+
 func (conf *ConfigArgs) Register(config *rheltypes.SafeMap) {
 	v := reflect.ValueOf(conf).Elem()
 	t := reflect.TypeOf(conf).Elem()
@@ -59,8 +69,6 @@ func (conf *ConfigArgs) Register(config *rheltypes.SafeMap) {
 	}
 }
 
-const defaultMkdirMode = 0o755
-
 func mkdir(dir string) {
 	err := os.MkdirAll(dir, defaultMkdirMode)
 	if err != nil {
@@ -70,12 +78,55 @@ func mkdir(dir string) {
 	}
 }
 
+func (conf *ConfigArgs) DbFilePath() (dbPath string) {
+	if !conf.IsDbFilenameSet() {
+		return
+	}
+
+	dbPath = conf.DbFilename.value
+
+	if conf.IsDirSet() {
+		mkdir(conf.Dir.value)
+		dbPath = path.Join(conf.Dir.value, dbPath)
+	}
+
+	return
+}
+
+func readDbFile(dbPath string) {
+	data, err := os.ReadFile(dbPath)
+	if err != nil {
+		log.Fatalf("error reading content of %q: %q", dbPath, err)
+	}
+
+	log.Println(hex.Dump(data))
+}
+
+func createDbFile(dbPath string) {
+}
+
+func (conf *ConfigArgs) InitDb() {
+	dbPath := conf.DbFilePath()
+
+	if len(dbPath) == 0 {
+		return
+	}
+
+	if _, err := os.Stat(dbPath); err == nil {
+		readDbFile(dbPath)
+	} else if os.IsNotExist(err) {
+		createDbFile(dbPath)
+	} else {
+		log.Fatalf("error reading %q: %q", dbPath, err)
+	}
+}
+
+const defaultMkdirMode = 0o755
+
 func Setup() {
 	conf := NewConfigArgs()
 
 	conf.Register(GetConfigMapInstance())
 
-	if dirFlag := conf.Dir; dirFlag.set {
-		mkdir(dirFlag.String())
-	}
+	conf.InitDb()
 }

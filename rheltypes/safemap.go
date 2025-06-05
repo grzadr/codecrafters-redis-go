@@ -99,6 +99,10 @@ func (sm *SafeMap) Close() {
 	close(sm.done)
 }
 
+func (sm *SafeMap) Size() int {
+	return len(sm.data)
+}
+
 func (sm *SafeMap) Keys() iter.Seq[string] {
 	return maps.Keys(sm.data)
 }
