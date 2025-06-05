@@ -28,6 +28,13 @@ func connectTcp(address string) *net.TCPListener {
 	return list
 }
 
+func handleErrors(errCh chan error) {
+	for err := range errCh {
+		commands.CloseMaps()
+		log.Fatalf("connection handler error: %s\n", err)
+	}
+}
+
 func handleConn(conn *net.TCPConn, errCh chan error) {
 	defer func() {
 		if err := conn.Close(); err != nil {
@@ -67,15 +74,13 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 }
 
 func main() {
-	l := connectTcp("0.0.0.0:6379")
-
 	errCh := make(chan error, DEFAULT_ERR_CHANNEL_CAPACITY)
 
-	go func() {
-		for err := range errCh {
-			log.Fatalf("connection handler error: %s\n", err)
-		}
-	}()
+	commands.Setup()
+
+	l := connectTcp("0.0.0.0:6379")
+
+	go handleErrors(errCh)
 
 	for {
 		conn, err := l.AcceptTCP()

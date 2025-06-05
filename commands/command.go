@@ -4,9 +4,44 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
+
+const (
+	defaultMapCapacity        = 1024
+	defaultMapCleanupInterval = 1 * time.Minute
+)
+
+var (
+	dataMap    *rheltypes.SafeMap
+	configMap  *rheltypes.SafeMap
+	dataOnce   sync.Once
+	configOnce sync.Once
+)
+
+func GetDataMapInstance() *rheltypes.SafeMap {
+	dataOnce.Do(func() {
+		dataMap = rheltypes.NewSafeMap(defaultMapCleanupInterval)
+	})
+
+	return dataMap
+}
+
+func GetConfigMapInstance() *rheltypes.SafeMap {
+	configOnce.Do(func() {
+		configMap = rheltypes.NewSafeMap(0)
+	})
+
+	return configMap
+}
+
+func CloseMaps() {
+	GetConfigMapInstance().Close()
+	GetDataMapInstance().Close()
+}
 
 type CommandError struct {
 	content []byte
@@ -42,21 +77,20 @@ func (c UnknownCommand) Exec(
 
 func (UnknownCommand) isRhelCommand() {}
 
-func NewRhelCommand(
-	name string,
-) (cmd RhelCommand) {
-	switch strings.ToUpper(name) {
-	case "PING":
-		return CmdPing{}
-	case "ECHO":
-		return CmdEcho{}
-	case "SET":
-		return CmdSet{}
-	case "GET":
-		return CmdGet{}
-	default:
-		return UnknownCommand(name)
+var commandMap = map[string]func() RhelCommand{
+	"PING":   func() RhelCommand { return CmdPing{} },
+	"ECHO":   func() RhelCommand { return CmdEcho{} },
+	"SET":    func() RhelCommand { return CmdSet{} },
+	"GET":    func() RhelCommand { return CmdGet{} },
+	"CONFIG": func() RhelCommand { return CmdConfig{} },
+}
+
+func NewRhelCommand(name string) RhelCommand {
+	if factory, exists := commandMap[strings.ToUpper(name)]; exists {
+		return factory()
 	}
+
+	return UnknownCommand(name)
 }
 
 func parseCommand(

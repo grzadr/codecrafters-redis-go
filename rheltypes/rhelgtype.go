@@ -47,13 +47,13 @@ func NewPrefixError(expected, detected rhelPrefix) error {
 func RhelEncode(iter *TokenIterator) (RhelType, error) {
 	switch p := iter.Current().Prefix(); p {
 	case ArrayPrefix:
-		return NewArray(iter)
+		return NewArrayFromTokens(iter)
 	case SimpleStringPrefix:
-		return NewSimpleString(iter)
+		return NewSimpleStringFromTokens(iter)
 	case BulkStringPrefix:
-		return NewBulkString(iter)
+		return NewBulkStringFromTokens(iter)
 	case IntegerPrefix:
-		return NewInteger(iter)
+		return NewIntegerFromTokens(iter)
 	default:
 		return nil, fmt.Errorf("unknown prefix %s", string(p))
 	}

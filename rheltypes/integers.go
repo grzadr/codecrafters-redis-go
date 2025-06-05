@@ -7,7 +7,7 @@ import (
 
 type Integer int
 
-func NewInteger(tokens *TokenIterator) (i Integer, err error) {
+func NewIntegerFromTokens(tokens *TokenIterator) (i Integer, err error) {
 	wrap := func(err error) error {
 		if err != nil {
 			return fmt.Errorf("failed to create integer: %w", err)

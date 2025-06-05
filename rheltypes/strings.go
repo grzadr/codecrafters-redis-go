@@ -7,7 +7,7 @@ import (
 
 type SimpleString string
 
-func NewSimpleString(iter *TokenIterator) (SimpleString, error) {
+func NewSimpleStringFromTokens(iter *TokenIterator) (SimpleString, error) {
 	first, ok := iter.Read(1)
 	if !ok {
 		return "", fmt.Errorf("failed to read value token")
@@ -50,20 +50,27 @@ type BulkString struct {
 	Text   string
 }
 
-func NewBulkString(tokens *TokenIterator) (s BulkString, err error) {
-	size, err := tokens.NextSize(BulkStringPrefix)
+func NewBulkString(str string) (bs BulkString) {
+	bs.Length = len(str)
+	bs.Text = str
+
+	return
+}
+
+func NewBulkStringFromTokens(tokens *TokenIterator) (bs BulkString, err error) {
+	bs.Length, err = tokens.NextSize(BulkStringPrefix)
 	if err != nil {
-		return s, fmt.Errorf("failed to create bulk string: %w", err)
+		return bs, fmt.Errorf("failed to create bulk string: %w", err)
 	}
 
 	valueToken, ok := tokens.Next()
 	if !ok {
-		return s, fmt.Errorf(
+		return bs, fmt.Errorf(
 			"failed to create bulk string: failed to read value token",
 		)
 	}
 
-	s = BulkString{Length: size, Text: string(valueToken)}
+	bs.Text = string(valueToken)
 
 	return
 }

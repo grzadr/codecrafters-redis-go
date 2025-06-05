@@ -8,7 +8,7 @@ import (
 
 type Array []RhelType
 
-func NewArray(tokens *TokenIterator) (Array, error) {
+func NewArrayFromTokens(tokens *TokenIterator) (Array, error) {
 	size, err := tokens.NextSize(ArrayPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create array: %w", err)
@@ -39,14 +39,15 @@ func (a Array) Size() int {
 }
 
 func (a Array) Serialize() []byte {
-	buf := make([]byte, 0)
+	buf := make([]byte, 0, a.Size())
 
-	buf = fmt.Append(
-		buf,
-		ArrayPrefix,
-		[]byte(strconv.Itoa(len(a))),
-		rhelFieldSep,
-	)
+	buf = append(buf, ArrayPrefix...)
+	buf = append(buf, strconv.Itoa(len(a))...)
+	buf = append(buf, rhelFieldSep...)
+
+	for _, element := range a {
+		buf = append(buf, element.Serialize()...)
+	}
 
 	return buf
 }
@@ -79,5 +80,27 @@ func (a Array) At(index int) RhelType {
 }
 
 func (a Array) Integer() (int, error) { return 0, nil }
+
+// func (a Array) Slice(from, to int) (s Array, err error) {
+// 	if from < 0 || from > to {
+// 		return nil, fmt.Errorf(
+// 			"invalid slice range: from %d must be >= 0 and < %d",
+// 			from,
+// 			to,
+// 		)
+// 	}
+
+// 	s = make(Array, to-from)
+
+// 	if len(a) - from > len(s) {
+// 		return nil, fmt.Errorf("")
+// 	}
+
+// 	for i := range len(s) {
+// 		s[i] = a[from + i]
+// 	}
+
+// 	return
+// }
 
 func (a Array) isRhelType() {}
