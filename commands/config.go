@@ -7,18 +7,12 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
-type CmdConfig struct{}
-
-func (CmdConfig) Name() string {
-	return "CONFIG"
+type CmdConfig struct {
+	BaseCommand
 }
 
-func (c CmdConfig) ErrWrap(input error) (err error) {
-	if input != nil {
-		err = fmt.Errorf("failed to run %q command: %w", c.Name(), input)
-	}
-
-	return
+func NewCmdConfig() CmdConfig {
+	return CmdConfig{BaseCommand: BaseCommand("CONFIG")}
 }
 
 const defaultGetValueLength = 2
@@ -57,5 +51,3 @@ func (c CmdConfig) Exec(
 		return nil, c.ErrWrap(fmt.Errorf("unknown config command %s", subcmd))
 	}
 }
-
-func (CmdConfig) isRhelCommand() {}

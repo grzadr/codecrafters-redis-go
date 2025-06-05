@@ -60,29 +60,38 @@ func NewCommandError(content []byte, message error) error {
 type RhelCommand interface {
 	isRhelCommand()
 	Name() string
+	ErrWrap(input error) error
 	Exec(args rheltypes.Array) (rheltypes.RhelType, error)
 }
 
-type UnknownCommand string
+type BaseCommand string
 
-func (c UnknownCommand) Name() string {
+func (c BaseCommand) Name() string {
 	return string(c)
 }
 
-func (c UnknownCommand) Exec(
+func (c BaseCommand) ErrWrap(input error) (err error) {
+	if input != nil {
+		err = fmt.Errorf("failed to run %q command: %w", c.Name(), input)
+	}
+
+	return
+}
+
+func (c BaseCommand) Exec(
 	value rheltypes.Array,
 ) (rheltypes.RhelType, error) {
 	return nil, fmt.Errorf("command %q not found", c.Name())
 }
 
-func (UnknownCommand) isRhelCommand() {}
+func (BaseCommand) isRhelCommand() {}
 
 var commandMap = map[string]func() RhelCommand{
-	"PING":   func() RhelCommand { return CmdPing{} },
-	"ECHO":   func() RhelCommand { return CmdEcho{} },
-	"SET":    func() RhelCommand { return CmdSet{} },
-	"GET":    func() RhelCommand { return CmdGet{} },
-	"CONFIG": func() RhelCommand { return CmdConfig{} },
+	"PING":   func() RhelCommand { return NewCmdPing() },
+	"ECHO":   func() RhelCommand { return NewCmdEcho() },
+	"SET":    func() RhelCommand { return NewCmdSet() },
+	"GET":    func() RhelCommand { return NewCmdGet() },
+	"CONFIG": func() RhelCommand { return NewCmdConfig() },
 }
 
 func NewRhelCommand(name string) RhelCommand {
@@ -90,7 +99,7 @@ func NewRhelCommand(name string) RhelCommand {
 		return factory()
 	}
 
-	return UnknownCommand(name)
+	return BaseCommand(name)
 }
 
 func parseCommand(

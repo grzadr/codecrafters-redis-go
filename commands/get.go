@@ -6,18 +6,12 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
-type CmdGet struct{}
-
-func (CmdGet) Name() string {
-	return "SET"
+type CmdGet struct {
+	BaseCommand
 }
 
-func (c CmdGet) ErrWrap(input error) (err error) {
-	if input != nil {
-		err = fmt.Errorf("failed to run %q command: %w", c.Name(), input)
-	}
-
-	return
+func NewCmdGet() CmdGet {
+	return CmdGet{BaseCommand: BaseCommand("GET")}
 }
 
 func (c CmdGet) Exec(
@@ -39,5 +33,3 @@ func (c CmdGet) Exec(
 
 	return
 }
-
-func (CmdGet) isRhelCommand() {}

@@ -31,18 +31,12 @@ func (a *CmdSetArgs) Set(name string, value rheltypes.RhelType) (err error) {
 	return nil
 }
 
-type CmdSet struct{}
-
-func (CmdSet) Name() string {
-	return "SET"
+type CmdSet struct {
+	BaseCommand
 }
 
-func (c CmdSet) ErrWrap(input error) (err error) {
-	if input != nil {
-		err = fmt.Errorf("failed to run %q command: %w", c.Name(), input)
-	}
-
-	return
+func NewCmdSet() CmdSet {
+	return CmdSet{BaseCommand: BaseCommand("SET")}
 }
 
 func parseSetArgs(args rheltypes.Array) (parsed CmdSetArgs, err error) {
@@ -105,5 +99,3 @@ func (c CmdSet) Exec(
 
 	return rheltypes.SimpleString("OK"), nil
 }
-
-func (CmdSet) isRhelCommand() {}
