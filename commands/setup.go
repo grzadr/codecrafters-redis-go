@@ -3,12 +3,14 @@ package commands
 import (
 	"encoding/hex"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"path"
 	"reflect"
 	"strings"
 
+	"github.com/codecrafters-io/redis-starter-go/internal"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -69,16 +71,7 @@ func (conf *ConfigArgs) Register(config *rheltypes.SafeMap) {
 	}
 }
 
-func mkdir(dir string) {
-	err := os.MkdirAll(dir, defaultMkdirMode)
-	if err != nil {
-		log.Fatalf("Error creating directory: %v\n", err)
-
-		return
-	}
-}
-
-func (conf *ConfigArgs) DbFilePath() (dbPath string) {
+func (conf *ConfigArgs) DbFilePath() (dbPath string, err error) {
 	if !conf.IsDbFilenameSet() {
 		return
 	}
@@ -86,47 +79,75 @@ func (conf *ConfigArgs) DbFilePath() (dbPath string) {
 	dbPath = conf.DbFilename.value
 
 	if conf.IsDirSet() {
-		mkdir(conf.Dir.value)
+		err = os.MkdirAll(conf.Dir.value, defaultMkdirMode)
 		dbPath = path.Join(conf.Dir.value, dbPath)
 	}
 
 	return
 }
 
-func readDbFile(dbPath string) {
-	data, err := os.ReadFile(dbPath)
+func dump(name string) error {
+	data, err := os.ReadFile(name)
 	if err != nil {
-		log.Fatalf("error reading content of %q: %q", dbPath, err)
+		return err
 	}
 
 	log.Println(hex.Dump(data))
+
+	return nil
+}
+
+func readDbFile(dbPath string) (err error) {
+	file, err := os.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("error reading content of %q: %w", dbPath, err)
+	}
+
+	defer func() {
+		closeErr := file.Close()
+		if err == nil {
+			err = fmt.Errorf("error closing %q: %w", dbPath, closeErr)
+		}
+	}()
+
+	internal.NewByteIteratorFromFile(file)
+
+	err = dump(dbPath)
+
+	return
 }
 
 func createDbFile(dbPath string) {
 }
 
-func (conf *ConfigArgs) InitDb() {
-	dbPath := conf.DbFilePath()
+func (conf *ConfigArgs) InitDb() (err error) {
+	dbPath, err := conf.DbFilePath()
 
-	if len(dbPath) == 0 {
+	if err != nil || len(dbPath) == 0 {
 		return
 	}
 
-	if _, err := os.Stat(dbPath); err == nil {
-		readDbFile(dbPath)
+	if _, err = os.Stat(dbPath); err == nil {
+		err = readDbFile(dbPath)
 	} else if os.IsNotExist(err) {
 		createDbFile(dbPath)
 	} else {
-		log.Fatalf("error reading %q: %q", dbPath, err)
+		return fmt.Errorf("error reading %q: %q", dbPath, err)
 	}
+
+	return
 }
 
 const defaultMkdirMode = 0o755
 
-func Setup() {
+func Setup() (err error) {
 	conf := NewConfigArgs()
 
 	conf.Register(GetConfigMapInstance())
 
-	conf.InitDb()
+	if err = conf.InitDb(GetDataMapInstance()); err != nil {
+		err = fmt.Errorf("error during setup: %w", err)
+	}
+
+	return
 }
