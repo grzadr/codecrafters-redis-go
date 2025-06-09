@@ -14,8 +14,8 @@ const (
 	DEFAULT_ERR_CHANNEL_CAPACITY = 4
 )
 
-func connectTcp(address string) *net.TCPListener {
-	ip, err := net.ResolveTCPAddr("tcp", address)
+func connectTcp(address, port string) *net.TCPListener {
+	ip, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%s", address, port))
 	if err != nil {
 		log.Fatalf("address %s is not valid", address)
 	}
@@ -74,11 +74,12 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 }
 
 func main() {
-	if err := commands.Setup(); err != nil {
+	conf, err := commands.Setup()
+	if err != nil {
 		log.Fatalf("error during setup: %s", err)
 	}
 
-	l := connectTcp("0.0.0.0:6379")
+	l := connectTcp("0.0.0.0", conf.Port)
 
 	errCh := make(chan error, DEFAULT_ERR_CHANNEL_CAPACITY)
 

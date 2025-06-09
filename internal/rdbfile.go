@@ -208,10 +208,6 @@ func (f *RdbFile) WriteContent(writer *bufio.Writer) (err error) {
 		return fmt.Errorf("error writing header: %w", headerErr)
 	}
 
-	// if _, metaErr := writer.Write(f.header.decode()); metaErr != nil {
-	// 	return fmt.Errorf("error writing metadata: %w", metaErr)
-	// }
-
 	if eofErr := writer.WriteByte(EndOfFileEncoding); eofErr != nil {
 		return fmt.Errorf("error writing enf of file: %w", eofErr)
 	}

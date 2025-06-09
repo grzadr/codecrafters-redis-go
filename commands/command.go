@@ -93,6 +93,7 @@ var commandMap = map[string]func() RhelCommand{
 	"GET":    func() RhelCommand { return NewCmdGet() },
 	"CONFIG": func() RhelCommand { return NewCmdConfig() },
 	"KEYS":   func() RhelCommand { return NewCmdKeys() },
+	"INFO":   func() RhelCommand { return NewCmdInfo() },
 }
 
 func NewRhelCommand(name string) RhelCommand {

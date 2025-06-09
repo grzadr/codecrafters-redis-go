@@ -34,12 +34,17 @@ func (sf stringFlag) String() string {
 type ConfigArgs struct {
 	Dir        stringFlag
 	DbFilename stringFlag
+	Port       string
+	Replica    stringFlag
 }
 
 func NewConfigArgs() (conf *ConfigArgs) {
 	conf = &ConfigArgs{}
 	flag.Var(&conf.Dir, "dir", "directory of db files")
 	flag.Var(&conf.DbFilename, "dbfilename", "name of db file")
+	flag.StringVar(&conf.Port, "port", "6379", "listen port number")
+	flag.StringVar(&conf.Port, "p", "6379", "listen port number")
+	flag.Var(&conf.DbFilename, "replicaof", "address of master")
 	flag.Parse()
 
 	return
@@ -61,13 +66,15 @@ func (conf *ConfigArgs) Register(config *rheltypes.SafeMap) {
 		field := v.Field(i)
 		fieldType := t.Field(i)
 
-		if !field.Field(0).Bool() {
-			continue
-		}
-
 		switch sf := field.Interface().(type) {
 		case stringFlag:
+			if !field.Field(0).Bool() {
+				continue
+			}
+
 			config.SetString(strings.ToLower(fieldType.Name), sf.String(), 0)
+		default:
+			continue
 		}
 	}
 }
@@ -190,8 +197,8 @@ func (conf *ConfigArgs) InitDb() (err error) {
 
 const defaultMkdirMode = 0o755
 
-func Setup() (err error) {
-	conf := NewConfigArgs()
+func Setup() (conf *ConfigArgs, err error) {
+	conf = NewConfigArgs()
 
 	conf.Register(GetConfigMapInstance())
 
