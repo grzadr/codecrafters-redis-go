@@ -74,6 +74,7 @@ const (
 	HashmapInZiplistEncoding
 	ListInQuicklistEncoding
 	MetadataEncoding              = 0xFA
+	SizesSectionEncoding          = 0xFB
 	ExpirationMiliSectionEncoding = 0xFC
 	ExpirationSectionEncoding     = 0xFD
 	DatabaseSectionEncoding       = 0xFE
@@ -81,19 +82,19 @@ const (
 )
 
 const (
-	IND_SIZE_6BIT        = 0b00
-	IND_SIZE_14BIT       = 0b01
-	IND_SIZE_4BYTES      = 0b10
-	IND_SIZE_INT         = 0b11
-	IND_SIZE_INT_8BIT    = 0xC0
-	IND_SIZE_INT_16BIT   = 0xC1
-	IND_SIZE_INT_32BIT   = 0xC2
-	IND_SIZE_L2F         = 0xC3
-	SIZE_INT_8BIT        = 1
-	SIZE_INT_16BIT       = 2
-	SIZE_INT_32BIT       = 4
-	SIZE_INT_64BIT       = 8
-	DISCARD_FIRST_2_BITS = 0x3F
+	indicatorSize6Bit     = 0b00
+	indicatorSize14Bit    = 0b01
+	indicatorSize4Bytes   = 0b10
+	indicatorSizeNumber   = 0b11
+	indicatorSizeInt8Bit  = 0xC0
+	indicatorSizeInt16Bit = 0xC1
+	indicatorSizeInt32Bit = 0xC2
+	indicatorSizeL2F      = 0xC3
+	sizeInt8Bit           = 1
+	sizeInt16Bit          = 2
+	sizeInt32Bit          = 4
+	sizeInt64Bit          = 8
+	maskFirstTwoBits      = 0x3F
 )
 
 type RdbSizeEncoding int
@@ -112,13 +113,13 @@ func (r *ByteIterator) readIntegerSize(b byte) (size RdbValueSize, err error) {
 	size.encoding = IntegerSizeEncoded
 
 	switch b {
-	case IND_SIZE_INT_8BIT:
-		size.size = SIZE_INT_8BIT
-	case IND_SIZE_INT_16BIT:
-		size.size = SIZE_INT_16BIT
-	case IND_SIZE_INT_32BIT:
-		size.size = SIZE_INT_32BIT
-	case IND_SIZE_L2F:
+	case indicatorSizeInt8Bit:
+		size.size = sizeInt8Bit
+	case indicatorSizeInt16Bit:
+		size.size = sizeInt16Bit
+	case indicatorSizeInt32Bit:
+		size.size = sizeInt32Bit
+	case indicatorSizeL2F:
 		err = fmt.Errorf("L2F size encoding not supported")
 	default:
 		err = fmt.Errorf(
@@ -140,12 +141,12 @@ func (r *ByteIterator) readSize() (size RdbValueSize, err error) {
 	log.Printf("sizeByte +%d %08b %X", r.Offset-1, sizeByte, sizeByte)
 
 	switch sizeByte >> 6 {
-	case IND_SIZE_6BIT:
-		size.size = int(sizeByte & DISCARD_FIRST_2_BITS)
-	case IND_SIZE_INT:
+	case indicatorSize6Bit:
+		size.size = int(sizeByte & maskFirstTwoBits)
+	case indicatorSizeNumber:
 		size, err = r.readIntegerSize(sizeByte)
-	case IND_SIZE_14BIT:
-		sizeByte &= DISCARD_FIRST_2_BITS
+	case indicatorSize14Bit:
+		sizeByte &= maskFirstTwoBits
 
 		if b, err := r.readByte(); err != nil {
 			return size, fmt.Errorf(
@@ -155,8 +156,8 @@ func (r *ByteIterator) readSize() (size RdbValueSize, err error) {
 		} else {
 			size.size = int(binary.BigEndian.Uint16([]byte{b, sizeByte}))
 		}
-	case IND_SIZE_4BYTES:
-		if b, err := r.readBytes(SIZE_INT_32BIT); err != nil {
+	case indicatorSize4Bytes:
+		if b, err := r.readBytes(sizeInt32Bit); err != nil {
 			return size, fmt.Errorf(
 				"failed to read 4 bytes string size: %w",
 				err,
@@ -184,11 +185,11 @@ func (v RdbStringValue) isRbdValue() {}
 
 func newRdbIntegerValue(buf []byte) (value RdbStringValue, err error) {
 	switch bufSize := len(buf); bufSize {
-	case SIZE_INT_8BIT:
+	case sizeInt8Bit:
 		value = RdbStringValue(strconv.Itoa(int(buf[0])))
-	case SIZE_INT_16BIT:
+	case sizeInt16Bit:
 		value = RdbStringValue(strconv.Itoa(int(binary.BigEndian.Uint16(buf))))
-	case SIZE_INT_32BIT:
+	case sizeInt32Bit:
 		value = RdbStringValue(strconv.Itoa(int(binary.BigEndian.Uint32(buf))))
 	default:
 		err = fmt.Errorf(
@@ -232,7 +233,7 @@ func (v RdbExpirationTime) isRbdValue() {}
 func newRdbExpirationTime(
 	iter *ByteIterator,
 ) (value RdbExpirationTime, err error) {
-	expBytes, err := iter.readBytes(SIZE_INT_32BIT)
+	expBytes, err := iter.readBytes(sizeInt32Bit)
 	if err != nil {
 		return value, err
 	}
@@ -247,7 +248,7 @@ func newRdbExpirationTime(
 func newRdbExpirationTimeMili(
 	iter *ByteIterator,
 ) (value RdbExpirationTime, err error) {
-	expBytes, err := iter.readBytes(SIZE_INT_64BIT)
+	expBytes, err := iter.readBytes(sizeInt64Bit)
 	if err != nil {
 		return value, err
 	}

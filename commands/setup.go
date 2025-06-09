@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bufio"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -130,7 +131,43 @@ func readDbFile(dbPath string) (err error) {
 	return err
 }
 
-func createDbFile(dbPath string) {
+func closeWriter(
+	file *os.File,
+	writer *bufio.Writer,
+	err *error,
+) {
+	if errFlush := writer.Flush(); errFlush != nil {
+		errFlush = fmt.Errorf("error flushing writer: %w", errFlush)
+		if *err == nil {
+			*err = errFlush
+		} else {
+			*err = fmt.Errorf("%w; %w", *err, errFlush)
+		}
+	}
+
+	if errClose := file.Close(); errClose != nil {
+		errClose = fmt.Errorf("error closing file: %w", errClose)
+		if *err == nil {
+			*err = errClose
+		} else {
+			*err = fmt.Errorf("%w; %w", *err, errClose)
+		}
+	}
+}
+
+func createDbFile(dbPath string) (err error) {
+	file, err := os.Create(dbPath)
+	if err != nil {
+		return
+	}
+
+	writer := bufio.NewWriter(file)
+
+	err = internal.NewRdbfFile().WriteContent(writer)
+
+	defer closeWriter(file, writer, &err)
+
+	return
 }
 
 func (conf *ConfigArgs) InitDb() (err error) {
@@ -143,7 +180,7 @@ func (conf *ConfigArgs) InitDb() (err error) {
 	if _, err = os.Stat(dbPath); err == nil {
 		err = readDbFile(dbPath)
 	} else if os.IsNotExist(err) {
-		createDbFile(dbPath)
+		err = createDbFile(dbPath)
 	} else {
 		return fmt.Errorf("error reading %q: %q", dbPath, err)
 	}

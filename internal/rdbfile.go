@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"iter"
@@ -14,44 +15,46 @@ type RdbHeader struct {
 }
 
 const (
-	HEADER_MAGIC_CONTENT   = "REDIS"
-	HEADER_MAGIC_SIZE      = len(HEADER_MAGIC_CONTENT)
-	HEADER_VERSION_CONTENT = "0011"
-	HEADER_VERSION_SIZE    = len(HEADER_VERSION_CONTENT)
-	DEFAULT_METADATA_SIZE  = 8
-	CHECKSUM_SIZE          = 8
-	METADATA_SECTION       = 0xFA
-	SIZES_SECTION          = 0xFB
-	EXP_MILI_SECTION       = 0xFC
-	EXP_SECTION            = 0xFD
-	DATABASE_SECTION       = 0xFE
-	EOF_SECTION            = 0xFF
+	defaultRdbHeaderMagicString    = "REDIS"
+	defaultRdbHeaderMagicLength    = len(defaultRdbHeaderMagicString)
+	defaultRdbHeaderVersionString  = "0011"
+	defaultRdbHeaderVersionLength  = len(defaultRdbHeaderVersionString)
+	defaultRdbFileMetadataCapacity = 8
+	defaultRdbFileKeyStoreCapacity = 8
+	defaultRdbFileChecksumLength   = 8
 )
 
-func NewRdbHeader() RdbHeader {
+func newRdbHeader() RdbHeader {
 	return RdbHeader{
-		magic:   HEADER_MAGIC_CONTENT,
-		version: HEADER_VERSION_CONTENT,
+		magic:   defaultRdbHeaderMagicString,
+		version: defaultRdbHeaderVersionString,
 	}
 }
 
-func ReadRdbHeader(iter *ByteIterator) (h RdbHeader, err error) {
-	data, err := iter.readBytes(HEADER_MAGIC_SIZE)
+func (h RdbHeader) decode() (content []byte) {
+	content = make([]byte, 0, len(h.magic)+len(h.version))
+	content = fmt.Append(content, h.magic, h.version)
+
+	return
+}
+
+func readRdbHeader(iter *ByteIterator) (h RdbHeader, err error) {
+	data, err := iter.readBytes(defaultRdbHeaderMagicLength)
 	if err != nil {
 		return
 	}
 
 	h.magic = string(data)
 
-	if h.magic != HEADER_MAGIC_CONTENT {
+	if h.magic != defaultRdbHeaderMagicString {
 		return h, fmt.Errorf(
 			"expected %s magic string, got %s",
 			h.magic,
-			HEADER_MAGIC_CONTENT,
+			defaultRdbHeaderMagicString,
 		)
 	}
 
-	data, err = iter.readBytes(HEADER_VERSION_SIZE)
+	data, err = iter.readBytes(defaultRdbHeaderVersionLength)
 	if err != nil {
 		return
 	}
@@ -63,8 +66,12 @@ func ReadRdbHeader(iter *ByteIterator) (h RdbHeader, err error) {
 
 type RdbMetadata map[string]string
 
+func newRdbMetadata() RdbMetadata {
+	return make(RdbMetadata, defaultRdbFileMetadataCapacity)
+}
+
 func readRdbMetadata(iter *ByteIterator) (meta RdbMetadata, err error) {
-	meta = make(RdbMetadata, DEFAULT_METADATA_SIZE)
+	meta = newRdbMetadata()
 
 	for {
 		key, value, err := iter.readKeyValue()
@@ -91,7 +98,7 @@ type RdbKeyValue struct {
 	Value  string
 }
 
-func newRdbKeyValue(
+func readRdbKeyValue(
 	iter *ByteIterator,
 ) (key string, value RdbKeyValue, err error) {
 	for {
@@ -112,16 +119,20 @@ func newRdbKeyValue(
 	}
 }
 
-type RdbFileValues map[string]RdbKeyValue
+type RdbFileKeyStore map[string]RdbKeyValue
 
-func newRdbFileValues(
+func newRdbKeyStore() RdbFileKeyStore {
+	return make(RdbFileKeyStore, defaultRdbFileKeyStoreCapacity)
+}
+
+func readRdbFileValues(
 	iter *ByteIterator,
 	size int,
-) (values RdbFileValues, err error) {
-	values = make(RdbFileValues, size)
+) (values RdbFileKeyStore, err error) {
+	values = make(RdbFileKeyStore, size)
 
 	for {
-		k, v, err := newRdbKeyValue(iter)
+		k, v, err := readRdbKeyValue(iter)
 		if errors.Is(err, ErrEndOfSection) {
 			break
 		}
@@ -142,8 +153,74 @@ type RdbFile struct {
 	selector    int
 	hashSize    int
 	expKeysSize int
-	values      RdbFileValues
-	checksum    [CHECKSUM_SIZE]byte
+	keyStore    RdbFileKeyStore
+	checksum    [defaultRdbFileChecksumLength]byte
+}
+
+func NewRdbfFile() *RdbFile {
+	return &RdbFile{
+		header:      newRdbHeader(),
+		metadata:    newRdbMetadata(),
+		selector:    0,
+		hashSize:    0,
+		expKeysSize: 0,
+		keyStore:    newRdbKeyStore(),
+		checksum:    [defaultRdbFileChecksumLength]byte{},
+	}
+}
+
+func ReadRdbFile(iter *ByteIterator) (rdb *RdbFile, err error) {
+	rdb = &RdbFile{}
+
+	if rdb.header, err = readRdbHeader(iter); err != nil {
+		return nil, fmt.Errorf("error reading rdb header: %w", err)
+	}
+
+	if rdb.metadata, err = readRdbMetadata(iter); err != nil {
+		return nil, fmt.Errorf("error reading rdb metadata: %w", err)
+	}
+
+	if err = rdb.setSelector(iter); err != nil {
+		return nil, fmt.Errorf("error reading rdb selector: %w", err)
+	}
+
+	if err = rdb.setSizes(iter); err != nil {
+		return nil, fmt.Errorf("error reading rdb size info: %w", err)
+	}
+
+	if rdb.keyStore, err = readRdbFileValues(iter, rdb.hashSize); err != nil {
+		return nil, fmt.Errorf("error reading rdb key values: %w", err)
+	}
+
+	if err = rdb.setChecksum(iter); err != nil {
+		return nil, fmt.Errorf("error reading rdb checksum: %w", err)
+	}
+
+	return
+}
+
+func (f RdbFile) Iter() iter.Seq2[string, RdbKeyValue] {
+	return maps.All(f.keyStore)
+}
+
+func (f *RdbFile) WriteContent(writer *bufio.Writer) (err error) {
+	if _, headerErr := writer.Write(f.header.decode()); headerErr != nil {
+		return fmt.Errorf("error writing header: %w", headerErr)
+	}
+
+	// if _, metaErr := writer.Write(f.header.decode()); metaErr != nil {
+	// 	return fmt.Errorf("error writing metadata: %w", metaErr)
+	// }
+
+	if eofErr := writer.WriteByte(EndOfFileEncoding); eofErr != nil {
+		return fmt.Errorf("error writing enf of file: %w", eofErr)
+	}
+
+	if _, checksumErr := writer.Write(f.checksum[:]); checksumErr != nil {
+		return fmt.Errorf("error writing checksum: %w", checksumErr)
+	}
+
+	return
 }
 
 func (f *RdbFile) setSelector(iter *ByteIterator) (err error) {
@@ -165,10 +242,10 @@ func (f *RdbFile) setSizes(iter *ByteIterator) (err error) {
 		return err
 	}
 
-	if markByte != SIZES_SECTION {
+	if markByte != SizesSectionEncoding {
 		return fmt.Errorf(
 			"expected %X mark, got %08b %X",
-			SIZES_SECTION,
+			SizesSectionEncoding,
 			markByte,
 			markByte,
 		)
@@ -197,46 +274,12 @@ func (f *RdbFile) setSizes(iter *ByteIterator) (err error) {
 }
 
 func (f *RdbFile) setChecksum(iter *ByteIterator) (err error) {
-	checkBytes, err := iter.readBytes(CHECKSUM_SIZE)
+	checkBytes, err := iter.readBytes(defaultRdbFileChecksumLength)
 	if err != nil {
 		return err
 	}
 
 	f.checksum = [8]byte(checkBytes)
-
-	return
-}
-
-func (f RdbFile) Iter() iter.Seq2[string, RdbKeyValue] {
-	return maps.All(f.values)
-}
-
-func ReadRdbFile(iter *ByteIterator) (rdb *RdbFile, err error) {
-	rdb = &RdbFile{}
-
-	if rdb.header, err = ReadRdbHeader(iter); err != nil {
-		return nil, fmt.Errorf("error reading rdb header: %w", err)
-	}
-
-	if rdb.metadata, err = readRdbMetadata(iter); err != nil {
-		return nil, fmt.Errorf("error reading rdb metadata: %w", err)
-	}
-
-	if err = rdb.setSelector(iter); err != nil {
-		return nil, fmt.Errorf("error reading rdb selector: %w", err)
-	}
-
-	if err = rdb.setSizes(iter); err != nil {
-		return nil, fmt.Errorf("error reading rdb size info: %w", err)
-	}
-
-	if rdb.values, err = newRdbFileValues(iter, rdb.hashSize); err != nil {
-		return nil, fmt.Errorf("error reading rdb key values: %w", err)
-	}
-
-	if err = rdb.setChecksum(iter); err != nil {
-		return nil, fmt.Errorf("error reading rdb checksum: %w", err)
-	}
 
 	return
 }
