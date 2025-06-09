@@ -43,6 +43,8 @@ func NewSafeMap(cleanupInterval time.Duration) *SafeMap {
 
 func (sm *SafeMap) SetToExpire(key string, value RhelType, px int64) {
 	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
 	if px > 0 {
 		px += currentTime()
 	}
@@ -51,8 +53,6 @@ func (sm *SafeMap) SetToExpire(key string, value RhelType, px int64) {
 		Value:      value,
 		Expiration: px,
 	}
-
-	sm.mu.Unlock()
 }
 
 func (sm *SafeMap) Set(key string, value RhelType) {
@@ -63,6 +63,18 @@ func (sm *SafeMap) SetString(key, value string, px int64) {
 	rhelValue := NewBulkString(value)
 
 	sm.SetToExpire(key, rhelValue, px)
+}
+
+func (sm *SafeMap) SetStringValue(key, value string, expiration int64) {
+	rhelValue := NewBulkString(value)
+
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+
+	sm.data[key] = RhelMapValue{
+		Value:      rhelValue,
+		Expiration: expiration,
+	}
 }
 
 func (sm *SafeMap) Get(key string) (value RhelType, found bool) {

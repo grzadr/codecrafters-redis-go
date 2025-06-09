@@ -74,18 +74,20 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 }
 
 func main() {
-	errCh := make(chan error, DEFAULT_ERR_CHANNEL_CAPACITY)
-
-	commands.Setup()
+	if err := commands.Setup(); err != nil {
+		log.Fatalf("error during setup: %s", err)
+	}
 
 	l := connectTcp("0.0.0.0:6379")
+
+	errCh := make(chan error, DEFAULT_ERR_CHANNEL_CAPACITY)
 
 	go handleErrors(errCh)
 
 	for {
 		conn, err := l.AcceptTCP()
 		if err != nil {
-			log.Fatalf("Error accepting connection: %s\n", err)
+			log.Fatalf("error accepting connection: %s\n", err)
 		}
 
 		go handleConn(conn, errCh)

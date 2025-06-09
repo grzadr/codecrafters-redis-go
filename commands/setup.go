@@ -89,10 +89,10 @@ func (conf *ConfigArgs) DbFilePath() (dbPath string, err error) {
 func dump(name string) error {
 	data, err := os.ReadFile(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to dump %q: %w", name, err)
 	}
 
-	log.Println(hex.Dump(data))
+	log.Printf("%d bytes,\n%s", len(data), hex.Dump(data))
 
 	return nil
 }
@@ -104,17 +104,30 @@ func readDbFile(dbPath string) (err error) {
 	}
 
 	defer func() {
-		closeErr := file.Close()
-		if err == nil {
+		if closeErr := file.Close(); err == nil && closeErr != nil {
 			err = fmt.Errorf("error closing %q: %w", dbPath, closeErr)
 		}
 	}()
 
-	internal.NewByteIteratorFromFile(file)
+	iter := internal.NewByteIteratorFromFile(file)
 
-	err = dump(dbPath)
+	if err = dump(dbPath); err != nil {
+		return err
+	}
 
-	return
+	rdbFile, err := internal.ReadRdbFile(iter)
+
+	data := GetDataMapInstance()
+
+	for key, value := range rdbFile.Iter() {
+		data.SetStringValue(
+			key, value.Value, value.Expiry,
+		)
+	}
+
+	log.Printf("%v\n", rdbFile)
+
+	return err
 }
 
 func createDbFile(dbPath string) {
@@ -145,8 +158,8 @@ func Setup() (err error) {
 
 	conf.Register(GetConfigMapInstance())
 
-	if err = conf.InitDb(GetDataMapInstance()); err != nil {
-		err = fmt.Errorf("error during setup: %w", err)
+	if err = conf.InitDb(); err != nil {
+		err = fmt.Errorf("error during db init: %w", err)
 	}
 
 	return
