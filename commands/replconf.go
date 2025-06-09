@@ -12,8 +12,10 @@ func NewCmdReplconf() CmdReplconf {
 	return CmdReplconf{BaseCommand: BaseCommand("REPLCONF")}
 }
 
-func (c CmdReplconf) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
-	return rheltypes.SimpleString("PONG"), nil
+func (c CmdReplconf) Exec(
+	args rheltypes.Array,
+) (value rheltypes.RhelType, err error) {
+	return
 }
 
 func (c CmdReplconf) Render(name, value string) (cmd rheltypes.Array) {

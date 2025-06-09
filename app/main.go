@@ -89,40 +89,41 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 }
 
 func sendHandshake(c *net.TCPConn, port string) (err error) {
-	_, err = c.Write(commands.NewCmdPing().Render().Serialize())
-	if err != nil {
-		return fmt.Errorf("failed to send ping: %w", err)
+	commands := []struct {
+		label string
+		cmd   []byte
+	}{
+		{label: "ping", cmd: commands.NewCmdPing().Render().Serialize()},
+		{
+			label: "replfconf port",
+			cmd: commands.NewCmdReplconf().
+				Render("listening-port", port).
+				Serialize(),
+		},
+		{
+			label: "replfconf port",
+			cmd: commands.NewCmdReplconf().
+				Render("capa", "psync2").
+				Serialize(),
+		},
+		{
+			label: "psync",
+			cmd:   commands.NewCmdPsync().Render("?", "-1").Serialize(),
+		},
 	}
 
 	response := make([]byte, defaultTcpBuffer)
 
-	_, err = c.Read(response)
-	if err != nil {
-		return fmt.Errorf("failed to read ping response: %w", err)
-	}
+	for _, cmd := range commands {
+		_, err = c.Write(cmd.cmd)
+		if err != nil {
+			return fmt.Errorf("failed to send %s: %w", cmd.label, err)
+		}
 
-	_, err = c.Write(
-		commands.NewCmdReplconf().Render("listening-port", port).Serialize(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to send port replconf: %w", err)
-	}
-
-	_, err = c.Read(response)
-	if err != nil {
-		return fmt.Errorf("failed to read port replconf response: %w", err)
-	}
-
-	_, err = c.Write(
-		commands.NewCmdReplconf().Render("capa", "psync2").Serialize(),
-	)
-	if err != nil {
-		return fmt.Errorf("failed to send capa replconf: %w", err)
-	}
-
-	_, err = c.Read(response)
-	if err != nil {
-		return fmt.Errorf("failed to read capa replconf response: %w", err)
+		_, err = c.Read(response)
+		if err != nil {
+			return fmt.Errorf("failed to read %s response: %w", cmd.label, err)
+		}
 	}
 
 	return err
