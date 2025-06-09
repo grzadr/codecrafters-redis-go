@@ -12,6 +12,10 @@ func NewCmdPing() CmdPing {
 	return CmdPing{BaseCommand: BaseCommand("PING")}
 }
 
-func (CmdPing) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
+func (c CmdPing) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
 	return rheltypes.SimpleString("PONG"), nil
+}
+
+func (c CmdPing) Render() (cmd rheltypes.Array) {
+	return rheltypes.NewArrayFromStrings([]string{string(c.BaseCommand)})
 }

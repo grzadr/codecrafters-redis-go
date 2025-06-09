@@ -56,6 +56,10 @@ func (conf *ConfigArgs) IsDbFilenameSet() bool {
 	return conf.DbFilename.set
 }
 
+func (conf *ConfigArgs) IsReplicaOf() bool {
+	return conf.ReplicaOf.set
+}
+
 func (conf *ConfigArgs) RegisterArgs(config *rheltypes.SafeMap) {
 	v := reflect.ValueOf(conf).Elem()
 	t := reflect.TypeOf(conf).Elem()

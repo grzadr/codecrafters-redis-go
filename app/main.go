@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/commands"
 )
@@ -14,7 +15,7 @@ const (
 	DEFAULT_ERR_CHANNEL_CAPACITY = 4
 )
 
-func connectTcp(address, port string) *net.TCPListener {
+func listenTcp(address, port string) *net.TCPListener {
 	ip, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%s", address, port))
 	if err != nil {
 		log.Fatalf("address %s is not valid", address)
@@ -26,6 +27,20 @@ func connectTcp(address, port string) *net.TCPListener {
 	}
 
 	return list
+}
+
+func dialTcp(address, port string) *net.TCPConn {
+	ip, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%s", address, port))
+	if err != nil {
+		log.Fatalf("address %s is not valid", address)
+	}
+
+	dial, err := net.DialTCP("tcp", nil, ip)
+	if err != nil {
+		log.Fatalf("failed to dial to %s: %s", ip, err)
+	}
+
+	return dial
 }
 
 func handleErrors(errCh chan error) {
@@ -73,17 +88,37 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 	}
 }
 
+func acceptMasterTCP(master string, errCh chan error) {
+	addr, port, _ := strings.Cut(master, " ")
+	c := dialTcp(addr, port)
+
+	defer func() {
+		if err := c.Close(); err != nil {
+			errCh <- err
+		}
+	}()
+
+	_, err := c.Write(commands.NewCmdPing().Render().Serialize())
+	if err != nil {
+		errCh <- fmt.Errorf("error during master handshake: %w", err)
+	}
+}
+
 func main() {
 	conf, err := commands.Setup()
 	if err != nil {
 		log.Fatalf("error during setup: %s", err)
 	}
 
-	l := connectTcp("0.0.0.0", conf.Port)
+	l := listenTcp("0.0.0.0", conf.Port)
 
 	errCh := make(chan error, DEFAULT_ERR_CHANNEL_CAPACITY)
 
 	go handleErrors(errCh)
+
+	if conf.IsReplicaOf() {
+		go acceptMasterTCP(conf.ReplicaOf.String(), errCh)
+	}
 
 	for {
 		conn, err := l.AcceptTCP()

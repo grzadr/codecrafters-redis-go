@@ -8,6 +8,16 @@ import (
 
 type Array []RhelType
 
+func NewArrayFromStrings(values []string) (a Array) {
+	a = make(Array, len(values))
+
+	for i, v := range values {
+		a[i] = NewBulkString(v)
+	}
+
+	return
+}
+
 func NewArrayFromTokens(tokens *TokenIterator) (Array, error) {
 	size, err := tokens.NextSize(ArrayPrefix)
 	if err != nil {
@@ -80,27 +90,5 @@ func (a Array) At(index int) RhelType {
 }
 
 func (a Array) Integer() (int, error) { return 0, nil }
-
-// func (a Array) Slice(from, to int) (s Array, err error) {
-// 	if from < 0 || from > to {
-// 		return nil, fmt.Errorf(
-// 			"invalid slice range: from %d must be >= 0 and < %d",
-// 			from,
-// 			to,
-// 		)
-// 	}
-
-// 	s = make(Array, to-from)
-
-// 	if len(a) - from > len(s) {
-// 		return nil, fmt.Errorf("")
-// 	}
-
-// 	for i := range len(s) {
-// 		s[i] = a[from + i]
-// 	}
-
-// 	return
-// }
 
 func (a Array) isRhelType() {}
