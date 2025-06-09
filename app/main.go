@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	DEFAULT_TCP_BUFFER           = 4096
-	DEFAULT_ERR_CHANNEL_CAPACITY = 4
+	defaultTcpBuffer            = 4096
+	defaultErrorChannelCapacity = 4
 )
 
 func listenTcp(address, port string) *net.TCPListener {
@@ -57,7 +57,7 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 		}
 	}()
 
-	buf := make([]byte, DEFAULT_TCP_BUFFER)
+	buf := make([]byte, defaultTcpBuffer)
 
 	var err error
 
@@ -88,9 +88,49 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 	}
 }
 
-func acceptMasterTCP(master string, errCh chan error) {
-	addr, port, _ := strings.Cut(master, " ")
-	c := dialTcp(addr, port)
+func sendHandshake(c *net.TCPConn, port string) (err error) {
+	_, err = c.Write(commands.NewCmdPing().Render().Serialize())
+	if err != nil {
+		return fmt.Errorf("failed to send ping: %w", err)
+	}
+
+	response := make([]byte, defaultTcpBuffer)
+
+	_, err = c.Read(response)
+	if err != nil {
+		return fmt.Errorf("failed to read ping response: %w", err)
+	}
+
+	_, err = c.Write(
+		commands.NewCmdReplconf().Render("listening-port", port).Serialize(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to send port replconf: %w", err)
+	}
+
+	_, err = c.Read(response)
+	if err != nil {
+		return fmt.Errorf("failed to read port replconf response: %w", err)
+	}
+
+	_, err = c.Write(
+		commands.NewCmdReplconf().Render("capa", "psync2").Serialize(),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to send capa replconf: %w", err)
+	}
+
+	_, err = c.Read(response)
+	if err != nil {
+		return fmt.Errorf("failed to read capa replconf response: %w", err)
+	}
+
+	return err
+}
+
+func acceptMasterTCP(master, port string, errCh chan error) {
+	addrMaster, portMaster, _ := strings.Cut(master, " ")
+	c := dialTcp(addrMaster, portMaster)
 
 	defer func() {
 		if err := c.Close(); err != nil {
@@ -98,8 +138,7 @@ func acceptMasterTCP(master string, errCh chan error) {
 		}
 	}()
 
-	_, err := c.Write(commands.NewCmdPing().Render().Serialize())
-	if err != nil {
+	if err := sendHandshake(c, port); err != nil {
 		errCh <- fmt.Errorf("error during master handshake: %w", err)
 	}
 }
@@ -112,12 +151,12 @@ func main() {
 
 	l := listenTcp("0.0.0.0", conf.Port)
 
-	errCh := make(chan error, DEFAULT_ERR_CHANNEL_CAPACITY)
+	errCh := make(chan error, defaultErrorChannelCapacity)
 
 	go handleErrors(errCh)
 
 	if conf.IsReplicaOf() {
-		go acceptMasterTCP(conf.ReplicaOf.String(), errCh)
+		go acceptMasterTCP(conf.ReplicaOf.String(), conf.Port, errCh)
 	}
 
 	for {

@@ -87,13 +87,14 @@ func (c BaseCommand) Exec(
 func (BaseCommand) isRhelCommand() {}
 
 var commandMap = map[string]func() RhelCommand{
-	"PING":   func() RhelCommand { return NewCmdPing() },
-	"ECHO":   func() RhelCommand { return NewCmdEcho() },
-	"SET":    func() RhelCommand { return NewCmdSet() },
-	"GET":    func() RhelCommand { return NewCmdGet() },
-	"CONFIG": func() RhelCommand { return NewCmdConfig() },
-	"KEYS":   func() RhelCommand { return NewCmdKeys() },
-	"INFO":   func() RhelCommand { return NewCmdInfo() },
+	"PING":     func() RhelCommand { return NewCmdPing() },
+	"ECHO":     func() RhelCommand { return NewCmdEcho() },
+	"SET":      func() RhelCommand { return NewCmdSet() },
+	"GET":      func() RhelCommand { return NewCmdGet() },
+	"CONFIG":   func() RhelCommand { return NewCmdConfig() },
+	"KEYS":     func() RhelCommand { return NewCmdKeys() },
+	"INFO":     func() RhelCommand { return NewCmdInfo() },
+	"REPLCONF": func() RhelCommand { return NewCmdReplconf() },
 }
 
 func NewRhelCommand(name string) RhelCommand {
