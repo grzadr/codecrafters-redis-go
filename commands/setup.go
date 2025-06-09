@@ -56,7 +56,7 @@ func (conf *ConfigArgs) IsDbFilenameSet() bool {
 	return conf.DbFilename.set
 }
 
-func (conf *ConfigArgs) Register(config *rheltypes.SafeMap) {
+func (conf *ConfigArgs) RegisterArgs(config *rheltypes.SafeMap) {
 	v := reflect.ValueOf(conf).Elem()
 	t := reflect.TypeOf(conf).Elem()
 
@@ -76,6 +76,34 @@ func (conf *ConfigArgs) Register(config *rheltypes.SafeMap) {
 		default:
 			continue
 		}
+	}
+}
+
+func (conf *ConfigArgs) Register(config *rheltypes.SafeMap) {
+	conf.RegisterArgs(config)
+
+	if !conf.ReplicaOf.set {
+		config.SetString(
+			"role",
+			"master",
+			0,
+		)
+		config.SetString(
+			"master_replid",
+			"8371b4fb1155b71f4a04d3e1bc3e18c4a990aeeb",
+			0,
+		)
+		config.SetString(
+			"master_repl_offset",
+			"0",
+			0,
+		)
+	} else {
+		config.SetString(
+			"role",
+			"slave",
+			0,
+		)
 	}
 }
 
