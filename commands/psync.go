@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"fmt"
+
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -15,7 +17,14 @@ func NewCmdPsync() CmdPsync {
 func (c CmdPsync) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	return
+	config := GetConfigMapInstance()
+
+	id, _ := config.Get("master_replid")
+	offset, _ := config.Get("master_repl_offset")
+
+	return rheltypes.SimpleString(
+		fmt.Sprintf("+FULLRESYNC %s %s", id, offset),
+	), nil
 }
 
 func (c CmdPsync) Render(id, offset string) (cmd rheltypes.Array) {

@@ -15,7 +15,7 @@ func NewCmdReplconf() CmdReplconf {
 func (c CmdReplconf) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	return
+	return rheltypes.NewBulkString("OK"), nil
 }
 
 func (c CmdReplconf) Render(name, value string) (cmd rheltypes.Array) {
