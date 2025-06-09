@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"os"
 	"strconv"
 	"time"
@@ -39,8 +38,6 @@ func (r *ByteIterator) readBytes(n int) ([]byte, error) {
 		return nil, fmt.Errorf("expected to read %d bytes, got %d", n, b)
 	}
 
-	log.Printf("read %d bytes, offset %d", n, r.Offset)
-
 	r.Offset += b
 
 	return buf, err
@@ -48,8 +45,6 @@ func (r *ByteIterator) readBytes(n int) ([]byte, error) {
 
 func (r *ByteIterator) readByte() (b byte, err error) {
 	b, err = r.buf.ReadByte()
-	log.Printf("read 1 byte, offset %d: %08b %X", r.Offset, b, b)
-
 	r.Offset++
 
 	return
@@ -137,8 +132,6 @@ func (r *ByteIterator) readSize() (size RdbValueSize, err error) {
 	if err != nil {
 		return size, fmt.Errorf("failed to read size byte: %w", err)
 	}
-
-	log.Printf("sizeByte +%d %08b %X", r.Offset-1, sizeByte, sizeByte)
 
 	switch sizeByte >> 6 {
 	case indicatorSize6Bit:

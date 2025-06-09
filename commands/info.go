@@ -17,7 +17,7 @@ func NewCmdInfo() CmdInfo {
 func (c CmdInfo) SubCmdReplication() (value rheltypes.RhelType, err error) {
 	config := GetConfigMapInstance()
 
-	_, ok := config.Get("replicationof")
+	_, ok := config.Get("replicaof")
 
 	if !ok {
 		return rheltypes.NewBulkString("role:master"), nil

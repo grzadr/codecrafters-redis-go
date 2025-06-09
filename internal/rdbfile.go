@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"iter"
-	"log"
 	"maps"
 )
 
@@ -82,11 +81,7 @@ func readRdbMetadata(iter *ByteIterator) (meta RdbMetadata, err error) {
 		}
 
 		meta[key.String()] = value.String()
-
-		log.Printf("added metadata %q - %q\n", key.String(), value.String())
 	}
-
-	log.Println("metadata completed")
 
 	return
 }
@@ -220,8 +215,6 @@ func (f *RdbFile) WriteContent(writer *bufio.Writer) (err error) {
 }
 
 func (f *RdbFile) setSelector(iter *ByteIterator) (err error) {
-	log.Println("reading selector size byte")
-
 	size, err := iter.readSize()
 	if err != nil {
 		return err
@@ -263,8 +256,6 @@ func (f *RdbFile) setSizes(iter *ByteIterator) (err error) {
 
 		*field.ptr = int(size.size)
 	}
-
-	log.Println("sizes completed")
 
 	return err
 }

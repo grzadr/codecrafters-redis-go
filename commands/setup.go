@@ -2,10 +2,8 @@ package commands
 
 import (
 	"bufio"
-	"encoding/hex"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"path"
 	"reflect"
@@ -35,7 +33,7 @@ type ConfigArgs struct {
 	Dir        stringFlag
 	DbFilename stringFlag
 	Port       string
-	Replica    stringFlag
+	ReplicaOf  stringFlag
 }
 
 func NewConfigArgs() (conf *ConfigArgs) {
@@ -44,7 +42,7 @@ func NewConfigArgs() (conf *ConfigArgs) {
 	flag.Var(&conf.DbFilename, "dbfilename", "name of db file")
 	flag.StringVar(&conf.Port, "port", "6379", "listen port number")
 	flag.StringVar(&conf.Port, "p", "6379", "listen port number")
-	flag.Var(&conf.DbFilename, "replicaof", "address of master")
+	flag.Var(&conf.ReplicaOf, "replicaof", "address of master")
 	flag.Parse()
 
 	return
@@ -73,6 +71,8 @@ func (conf *ConfigArgs) Register(config *rheltypes.SafeMap) {
 			}
 
 			config.SetString(strings.ToLower(fieldType.Name), sf.String(), 0)
+		case string:
+			config.SetString(strings.ToLower(fieldType.Name), sf, 0)
 		default:
 			continue
 		}
@@ -94,17 +94,6 @@ func (conf *ConfigArgs) DbFilePath() (dbPath string, err error) {
 	return
 }
 
-func dump(name string) error {
-	data, err := os.ReadFile(name)
-	if err != nil {
-		return fmt.Errorf("failed to dump %q: %w", name, err)
-	}
-
-	log.Printf("%d bytes,\n%s", len(data), hex.Dump(data))
-
-	return nil
-}
-
 func readDbFile(dbPath string) (err error) {
 	file, err := os.Open(dbPath)
 	if err != nil {
@@ -119,10 +108,6 @@ func readDbFile(dbPath string) (err error) {
 
 	iter := internal.NewByteIteratorFromFile(file)
 
-	if err = dump(dbPath); err != nil {
-		return err
-	}
-
 	rdbFile, err := internal.ReadRdbFile(iter)
 
 	data := GetDataMapInstance()
@@ -132,8 +117,6 @@ func readDbFile(dbPath string) (err error) {
 			key, value.Value, value.Expiry,
 		)
 	}
-
-	log.Printf("%v\n", rdbFile)
 
 	return err
 }
