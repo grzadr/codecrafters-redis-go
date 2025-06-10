@@ -136,8 +136,10 @@ func parseCommand(
 }
 
 type CommandResult struct {
-	result rheltypes.RhelType
-	Err    error
+	result         rheltypes.RhelType
+	KeepConnection bool
+	Resend         bool
+	Err            error
 }
 
 func (r CommandResult) Serialize() []byte {
@@ -148,20 +150,21 @@ func (r CommandResult) Serialize() []byte {
 	return r.result.Serialize()
 }
 
-func ExecuteCommand(command []byte) iter.Seq[CommandResult] {
-	return func(yield func(CommandResult) bool) {
+func ExecuteCommand(command []byte) iter.Seq[*CommandResult] {
+	return func(yield func(*CommandResult) bool) {
+		result := &CommandResult{}
 		cmd, args, err := parseCommand(command)
 		if err != nil {
-			yield(CommandResult{Err: NewCommandError(command, err)})
+			result.Err = NewCommandError(command, err)
+			yield(result)
 
 			return
 		}
 
-		result := CommandResult{}
-
-		result.result, err = cmd.Exec(args)
-		if err != nil {
-			yield(CommandResult{Err: NewCommandError(command, err)})
+		result.result, result.Err = cmd.Exec(args)
+		if result.Err != nil {
+			result.Err = NewCommandError(command, err)
+			yield(result)
 
 			return
 		}
@@ -170,10 +173,15 @@ func ExecuteCommand(command []byte) iter.Seq[CommandResult] {
 			return
 		}
 
-		if p, ok := cmd.(CmdPsync); ok {
-			if !yield(CommandResult{result: p.RenderFile()}) {
+		switch p := cmd.(type) {
+		case CmdPsync:
+			if !yield(
+				&CommandResult{result: p.RenderFile(), KeepConnection: true},
+			) {
 				return
 			}
+		case CmdSet:
+			result.Resend = true
 		}
 	}
 }

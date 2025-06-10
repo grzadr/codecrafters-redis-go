@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/commands"
 )
@@ -14,6 +15,42 @@ const (
 	defaultTcpBuffer            = 4096
 	defaultErrorChannelCapacity = 4
 )
+
+var (
+	connections []net.Conn
+	connMutex   sync.Mutex
+)
+
+func addConnection(conn net.Conn) {
+	connMutex.Lock()
+	defer connMutex.Unlock()
+
+	connections = append(connections, conn)
+}
+
+func removeConnection(conn net.Conn) {
+	connMutex.Lock()
+	defer connMutex.Unlock()
+
+	for i, c := range connections {
+		if c == conn {
+			connections = append(connections[:i], connections[i+1:]...)
+
+			break
+		}
+	}
+}
+
+func closeAllConnections() {
+	connMutex.Lock()
+	defer connMutex.Unlock()
+
+	for _, conn := range connections {
+		conn.Close()
+	}
+
+	connections = nil
+}
 
 func listenTcp(address, port string) *net.TCPListener {
 	ip, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%s", address, port))
@@ -50,16 +87,39 @@ func handleErrors(errCh chan error) {
 	}
 }
 
+func sendResponse(
+	conn *net.TCPConn,
+	result commands.CommandResult,
+) (keep bool, err error) {
+	if err = result.Err; err != nil {
+		err = fmt.Errorf("error during cmd execution: %w", err)
+	} else if _, err = conn.Write(result.Serialize()); err != nil {
+		err = fmt.Errorf("error sending data: %w", err)
+	} else if result.KeepConnection {
+		addConnection(conn)
+
+		keep = true
+	}
+
+	return
+}
+
 func handleConn(conn *net.TCPConn, errCh chan error) {
+	var keepConnection bool
+
+	var err error
+
 	defer func() {
+		if keepConnection {
+			return
+		}
+
 		if err := conn.Close(); err != nil {
 			errCh <- err
 		}
 	}()
 
 	buf := make([]byte, defaultTcpBuffer)
-
-	var err error
 
 	for {
 		n := 0
@@ -74,16 +134,13 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 		}
 
 		for result := range commands.ExecuteCommand(buf[:n]) {
-			if err := result.Err; err != nil {
-				errCh <- fmt.Errorf("error during cmd execution: %w", err)
+			keepConnection, err = sendResponse(conn, result)
+			if err != nil {
+				errCh <- err
+			}
 
-				return
-			} else if _, err := conn.Write(result.Serialize()); err != nil {
-				errCh <- fmt.Errorf("error sending data: %w", err)
-
-				return
-			} else {
-				continue
+			if keepConnection {
+				addConnection(conn)
 			}
 		}
 	}
@@ -167,6 +224,9 @@ func main() {
 			log.Fatalf("error accepting connection: %s\n", err)
 		}
 
-		go handleConn(conn, errCh)
+		// Set keepConnection to true when you want to keep the connection
+		// for later closure, false for immediate closure
+		keepConnection := false // Change this based on your conditions
+		go handleConn(conn, errCh, keepConnection)
 	}
 }
