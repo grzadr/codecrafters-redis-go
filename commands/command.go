@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/hex"
 	"fmt"
+	"iter"
 	"strings"
 	"sync"
 	"time"
@@ -134,16 +135,61 @@ func parseCommand(
 	}
 }
 
-func ExecuteCommand(command []byte) (result rheltypes.RhelType, err error) {
-	cmd, args, err := parseCommand(command)
-	if err != nil {
-		return nil, NewCommandError(command, err)
-	}
-
-	result, err = cmd.Exec(args)
-	if err != nil {
-		return nil, NewCommandError(command, err)
-	}
-
-	return
+type CommandResult struct {
+	result rheltypes.RhelType
+	Err    error
 }
+
+func (r CommandResult) Serialize() []byte {
+	if r.result == nil {
+		return nil
+	}
+
+	return r.result.Serialize()
+}
+
+func ExecuteCommand(command []byte) iter.Seq[CommandResult] {
+	return func(yield func(CommandResult) bool) {
+		cmd, args, err := parseCommand(command)
+		if err != nil {
+			yield(CommandResult{Err: NewCommandError(command, err)})
+
+			return
+		}
+
+		result := CommandResult{}
+
+		result.result, err = cmd.Exec(args)
+		if err != nil {
+			yield(CommandResult{Err: NewCommandError(command, err)})
+
+			return
+		}
+
+		if !yield(result) {
+			return
+		}
+
+		if p, ok := cmd.(CmdPsync); ok {
+			if !yield(CommandResult{result: p.RenderFile()}) {
+				return
+			}
+		}
+	}
+}
+
+// func ExecuteCommand(command []byte) (result rheltypes.RhelType, err error) {
+// 	cmd, args, err := parseCommand(command)
+// 	if err != nil {
+// 		return nil, NewCommandError(command, err)
+// 	}
+
+// 	result, err = cmd.Exec(args)
+// 	if err != nil {
+// 		return nil, NewCommandError(command, err)
+// 	}
+
+// 	if cmd.(CmdPsync)
+
+// 	return
+// }

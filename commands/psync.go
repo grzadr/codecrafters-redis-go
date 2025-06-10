@@ -1,8 +1,11 @@
 package commands
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
 
+	"github.com/codecrafters-io/redis-starter-go/internal"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -31,4 +34,14 @@ func (c CmdPsync) Render(id, offset string) (cmd rheltypes.Array) {
 	return rheltypes.NewArrayFromStrings(
 		[]string{string(c.BaseCommand), id, offset},
 	)
+}
+
+func (c CmdPsync) RenderFile() (content rheltypes.RhelType) {
+	var buffer bytes.Buffer
+	buf := bufio.NewWriter(&buffer)
+
+	internal.NewRdbfFile().WriteContent(buf)
+	buf.Flush()
+
+	return rheltypes.Bytes(buffer.Bytes())
 }
