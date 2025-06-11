@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -105,23 +106,20 @@ func sendResponse(
 	return
 }
 
-func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, ok bool) {
-	cmd = make([]byte, defaultTcpBuffer)
+func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, err error) {
+	buf := make([]byte, defaultTcpBuffer)
+	n := 0
 
-	if n, err := conn.Read(cmd); err != nil {
+	if n, err = conn.Read(buf); err != nil {
 		switch err {
 		case io.EOF:
-
-		default:
-			errCh <- err
+			err = nil
 		}
 
 		return
-	} else {
-		cmd = cmd[:n]
 	}
 
-	ok = true
+	cmd = buf[:n]
 
 	return
 }
@@ -140,13 +138,19 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 	}()
 
 	for {
-		cmd, ok := readCommand(conn, errCh)
-		if !ok {
+		cmd, err := readCommand(conn)
+		if err != nil {
+			errCh <- err
+
 			return
 		}
 
 		for result := range commands.ExecuteCommand(cmd) {
-			if err := sendResponse(conn, result); err != nil {
+			if err := result.Err; err != nil {
+				errCh <- err
+
+				return
+			} else if err := sendResponse(conn, result); err != nil {
 				errCh <- err
 
 				return
@@ -206,16 +210,35 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 
 func acceptMasterTCP(master, port string, errCh chan error) {
 	addrMaster, portMaster, _ := strings.Cut(master, " ")
-	c := dialTcp(addrMaster, portMaster)
+	conn := dialTcp(addrMaster, portMaster)
 
 	defer func() {
-		if err := c.Close(); err != nil {
+		if err := conn.Close(); err != nil {
 			errCh <- err
 		}
 	}()
 
-	if err := sendHandshake(c, port); err != nil {
+	if err := sendHandshake(conn, port); err != nil {
 		errCh <- fmt.Errorf("error during master handshake: %w", err)
+	}
+
+	for {
+		cmd, err := readCommand(conn)
+		if err != nil {
+			errCh <- err
+
+			return
+		}
+
+		log.Println(hex.Dump(cmd))
+
+		for result := range commands.ExecuteCommand(cmd) {
+			if err := result.Err; err != nil {
+				errCh <- err
+
+				return
+			}
+		}
 	}
 }
 
