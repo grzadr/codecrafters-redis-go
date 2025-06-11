@@ -99,3 +99,5 @@ func (c CmdSet) Exec(
 
 	return rheltypes.SimpleString("OK"), nil
 }
+
+func (c CmdSet) Resend() bool { return true }

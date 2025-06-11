@@ -28,19 +28,6 @@ func addConnection(conn net.Conn) {
 	connections = append(connections, conn)
 }
 
-func removeConnection(conn net.Conn) {
-	connMutex.Lock()
-	defer connMutex.Unlock()
-
-	for i, c := range connections {
-		if c == conn {
-			connections = append(connections[:i], connections[i+1:]...)
-
-			break
-		}
-	}
-}
-
 func closeAllConnections() {
 	connMutex.Lock()
 	defer connMutex.Unlock()
@@ -50,6 +37,19 @@ func closeAllConnections() {
 	}
 
 	connections = nil
+}
+
+func resendCommand(cmd []byte, errCh chan error) {
+	connMutex.Lock()
+	defer connMutex.Unlock()
+
+	for _, conn := range connections {
+		if _, err := conn.Write(cmd); err != nil {
+			errCh <- fmt.Errorf("error resending data: %w", err)
+
+			break
+		}
+	}
 }
 
 func listenTcp(address, port string) *net.TCPListener {
@@ -80,37 +80,57 @@ func dialTcp(address, port string) *net.TCPConn {
 	return dial
 }
 
+func clean() {
+	commands.CloseMaps()
+	closeAllConnections()
+}
+
 func handleErrors(errCh chan error) {
 	for err := range errCh {
-		commands.CloseMaps()
+		clean()
 		log.Fatalf("connection handler error: %s\n", err)
 	}
 }
 
 func sendResponse(
 	conn *net.TCPConn,
-	result commands.CommandResult,
-) (keep bool, err error) {
+	result *commands.CommandResult,
+) (err error) {
 	if err = result.Err; err != nil {
 		err = fmt.Errorf("error during cmd execution: %w", err)
 	} else if _, err = conn.Write(result.Serialize()); err != nil {
 		err = fmt.Errorf("error sending data: %w", err)
-	} else if result.KeepConnection {
-		addConnection(conn)
-
-		keep = true
 	}
 
 	return
 }
 
-func handleConn(conn *net.TCPConn, errCh chan error) {
-	var keepConnection bool
+func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, ok bool) {
+	cmd = make([]byte, defaultTcpBuffer)
 
-	var err error
+	if n, err := conn.Read(cmd); err != nil {
+		switch err {
+		case io.EOF:
+
+		default:
+			errCh <- err
+		}
+
+		return
+	} else {
+		cmd = cmd[:n]
+	}
+
+	ok = true
+
+	return
+}
+
+func handleConn(conn *net.TCPConn, errCh chan error) {
+	var keep bool
 
 	defer func() {
-		if keepConnection {
+		if keep {
 			return
 		}
 
@@ -119,28 +139,25 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 		}
 	}()
 
-	buf := make([]byte, defaultTcpBuffer)
-
 	for {
-		n := 0
-
-		if n, err = conn.Read(buf); err != nil {
-			switch err {
-			case io.EOF:
-				return
-			default:
-				errCh <- err
-			}
+		cmd, ok := readCommand(conn, errCh)
+		if !ok {
+			return
 		}
 
-		for result := range commands.ExecuteCommand(buf[:n]) {
-			keepConnection, err = sendResponse(conn, result)
-			if err != nil {
+		for result := range commands.ExecuteCommand(cmd) {
+			if err := sendResponse(conn, result); err != nil {
 				errCh <- err
+
+				return
 			}
 
-			if keepConnection {
+			if keep = result.KeepConnection; keep {
 				addConnection(conn)
+			}
+
+			if result.Resend {
+				resendCommand(cmd, errCh)
 			}
 		}
 	}
@@ -204,6 +221,9 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 
 func main() {
 	conf, err := commands.Setup()
+
+	defer clean()
+
 	if err != nil {
 		log.Fatalf("error during setup: %s", err)
 	}
@@ -221,12 +241,9 @@ func main() {
 	for {
 		conn, err := l.AcceptTCP()
 		if err != nil {
-			log.Fatalf("error accepting connection: %s\n", err)
+			errCh <- fmt.Errorf("error accepting connection: %s\n", err)
 		}
 
-		// Set keepConnection to true when you want to keep the connection
-		// for later closure, false for immediate closure
-		keepConnection := false // Change this based on your conditions
-		go handleConn(conn, errCh, keepConnection)
+		go handleConn(conn, errCh)
 	}
 }

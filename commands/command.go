@@ -63,6 +63,7 @@ type RhelCommand interface {
 	Name() string
 	ErrWrap(input error) error
 	Exec(args rheltypes.Array) (rheltypes.RhelType, error)
+	Resend() bool
 }
 
 type BaseCommand string
@@ -84,6 +85,8 @@ func (c BaseCommand) Exec(
 ) (rheltypes.RhelType, error) {
 	return nil, c.ErrWrap(fmt.Errorf("command %q not found", c.Name()))
 }
+
+func (c BaseCommand) Resend() bool { return false }
 
 func (BaseCommand) isRhelCommand() {}
 
@@ -169,6 +172,8 @@ func ExecuteCommand(command []byte) iter.Seq[*CommandResult] {
 			return
 		}
 
+		result.Resend = cmd.Resend()
+
 		if !yield(result) {
 			return
 		}
@@ -180,8 +185,6 @@ func ExecuteCommand(command []byte) iter.Seq[*CommandResult] {
 			) {
 				return
 			}
-		case CmdSet:
-			result.Resend = true
 		}
 	}
 }
