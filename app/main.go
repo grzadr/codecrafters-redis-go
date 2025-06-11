@@ -179,7 +179,7 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 				Serialize(),
 		},
 		{
-			label: "replfconf port",
+			label: "replfconf capa",
 			cmd: commands.NewCmdReplconf().
 				Render("capa", "psync2").
 				Serialize(),
@@ -228,7 +228,23 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 		}
 
 		for result := range commands.ExecuteCommand(cmd) {
+			log.Println(result)
+
 			if err := result.Err; err != nil {
+				errCh <- err
+
+				return
+			}
+
+			if !result.ReplicaRespond {
+				log.Println("no replica response needed")
+
+				continue
+			}
+
+			log.Println("responding")
+
+			if err := sendResponse(conn, result); err != nil {
 				errCh <- err
 
 				return

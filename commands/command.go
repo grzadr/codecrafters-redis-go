@@ -64,6 +64,7 @@ type RhelCommand interface {
 	ErrWrap(input error) error
 	Exec(args rheltypes.Array) (rheltypes.RhelType, error)
 	Resend() bool
+	ReplicaRespond() bool
 }
 
 type BaseCommand string
@@ -87,6 +88,8 @@ func (c BaseCommand) Exec(
 }
 
 func (c BaseCommand) Resend() bool { return false }
+
+func (c BaseCommand) ReplicaRespond() bool { return false }
 
 func (BaseCommand) isRhelCommand() {}
 
@@ -170,6 +173,7 @@ type CommandResult struct {
 	result         rheltypes.RhelType
 	KeepConnection bool
 	Resend         bool
+	ReplicaRespond bool
 	Err            error
 }
 
@@ -203,6 +207,7 @@ func ExecuteCommand(command []byte) iter.Seq[*CommandResult] {
 			}
 
 			result.Resend = cmd.Resend()
+			result.ReplicaRespond = cmd.ReplicaRespond()
 
 			if !yield(result) {
 				return
