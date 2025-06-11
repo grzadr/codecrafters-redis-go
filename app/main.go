@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -199,12 +198,10 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 			return fmt.Errorf("failed to send %s: %w", cmd.label, err)
 		}
 
-		n, err := c.Read(response)
+		_, err := c.Read(response)
 		if err != nil {
 			return fmt.Errorf("failed to read %s response: %w", cmd.label, err)
 		}
-
-		log.Println(cmd.label, "\n", hex.Dump(response[:n]))
 	}
 
 	return err
@@ -229,8 +226,6 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 		if done {
 			return
 		}
-
-		// log.Println("cmd:", hex.Dump(cmd))
 
 		for result := range commands.ExecuteCommand(cmd) {
 			if err := result.Err; err != nil {
