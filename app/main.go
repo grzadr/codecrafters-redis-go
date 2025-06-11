@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -106,20 +107,21 @@ func sendResponse(
 	return
 }
 
-func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, err error) {
+func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, end bool) {
 	buf := make([]byte, defaultTcpBuffer)
-	n := 0
+	// n := 0
 
-	if n, err = conn.Read(buf); err != nil {
-		switch err {
-		case io.EOF:
-			err = nil
+	if n, err := conn.Read(buf); err != nil {
+		end = true
+
+		if !errors.Is(err, io.EOF) {
+			errCh <- err
 		}
 
 		return
+	} else {
+		cmd = buf[:n]
 	}
-
-	cmd = buf[:n]
 
 	return
 }
@@ -138,10 +140,8 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 	}()
 
 	for {
-		cmd, err := readCommand(conn)
-		if err != nil {
-			errCh <- err
-
+		cmd, end := readCommand(conn, errCh)
+		if end {
 			return
 		}
 
@@ -168,7 +168,7 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 }
 
 func sendHandshake(c *net.TCPConn, port string) (err error) {
-	commands := []struct {
+	handshakeCommands := []struct {
 		label string
 		cmd   []byte
 	}{
@@ -193,16 +193,18 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 
 	response := make([]byte, defaultTcpBuffer)
 
-	for _, cmd := range commands {
+	for _, cmd := range handshakeCommands {
 		_, err = c.Write(cmd.cmd)
 		if err != nil {
 			return fmt.Errorf("failed to send %s: %w", cmd.label, err)
 		}
 
-		_, err = c.Read(response)
+		n, err := c.Read(response)
 		if err != nil {
 			return fmt.Errorf("failed to read %s response: %w", cmd.label, err)
 		}
+
+		log.Println(cmd.label, "\n", hex.Dump(response[:n]))
 	}
 
 	return err
@@ -223,14 +225,12 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 	}
 
 	for {
-		cmd, err := readCommand(conn)
-		if err != nil {
-			errCh <- err
-
+		cmd, done := readCommand(conn, errCh)
+		if done {
 			return
 		}
 
-		log.Println(hex.Dump(cmd))
+		// log.Println("cmd:", hex.Dump(cmd))
 
 		for result := range commands.ExecuteCommand(cmd) {
 			if err := result.Err; err != nil {

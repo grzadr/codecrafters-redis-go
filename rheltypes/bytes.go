@@ -6,8 +6,9 @@ type Bytes []byte
 
 func (b Bytes) Serialize() (buf []byte) {
 	bSize := len(b)
-	buf = make([]byte, 0, bSize+3)
-	buf = fmt.Append(buf, "$", len(b), "\r\n", b)
+	header := fmt.Sprintf("$%d\r\n", bSize)
+	buf = make([]byte, 0, bSize+len(header))
+	buf = fmt.Append(buf, header, b)
 
 	return
 }

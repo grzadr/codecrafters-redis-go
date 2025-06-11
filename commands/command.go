@@ -110,9 +110,15 @@ func NewRhelCommand(name string) RhelCommand {
 	return BaseCommand(name)
 }
 
+type ParsedCommand struct {
+	cmd  RhelCommand
+	args rheltypes.Array
+	err  error
+}
+
 func parseCommand(
 	command []byte,
-) (cmd RhelCommand, args rheltypes.Array, err error) {
+) iter.Seq[ParsedCommand] {
 	wrap := func(newErr error) error {
 		if newErr != nil {
 			return fmt.Errorf("error in parseCommand: %w", newErr)
@@ -120,21 +126,43 @@ func parseCommand(
 
 		return nil
 	}
-	tokens, err := rheltypes.NewTokenIterator(command)
-	if err != nil {
-		return nil, nil, wrap(fmt.Errorf("tokenization error: %w", err))
-	}
 
-	rawValue, err := rheltypes.RhelEncode(tokens)
-	if err != nil {
-		return nil, nil, wrap(fmt.Errorf("encoding error: %w", err))
-	}
+	return func(yield func(ParsedCommand) bool) {
+		tokens, err := rheltypes.NewTokenIterator(command)
+		if err != nil {
+			yield(ParsedCommand{
+				err: wrap(fmt.Errorf("tokenization error: %w", err)),
+			})
 
-	switch value := rawValue.(type) {
-	case rheltypes.Array:
-		return NewRhelCommand(value[0].String()), value[1:], nil
-	default:
-		return nil, nil, wrap(fmt.Errorf("expected array, got %T", value))
+			return
+		}
+
+		for tokens.Left() > 0 {
+			rawValue, err := rheltypes.RhelEncode(tokens)
+			if err != nil {
+				yield(ParsedCommand{
+					err: wrap(fmt.Errorf("encoding error: %w", err)),
+				})
+
+				return
+			}
+
+			switch value := rawValue.(type) {
+			case rheltypes.Array:
+				if !yield(ParsedCommand{
+					cmd:  NewRhelCommand(value[0].String()),
+					args: value[1:],
+				}) {
+					return
+				}
+			default:
+				yield(ParsedCommand{
+					err: wrap(fmt.Errorf("expected array, got %T", value)),
+				})
+
+				return
+			}
+		}
 	}
 }
 
@@ -155,35 +183,38 @@ func (r CommandResult) Serialize() []byte {
 
 func ExecuteCommand(command []byte) iter.Seq[*CommandResult] {
 	return func(yield func(*CommandResult) bool) {
-		result := &CommandResult{}
-		cmd, args, err := parseCommand(command)
-		if err != nil {
-			result.Err = NewCommandError(command, err)
-			yield(result)
+		for parsed := range parseCommand(command) {
+			result := &CommandResult{}
+			if err := parsed.err; err != nil {
+				result.Err = NewCommandError(command, err)
+				yield(result)
 
-			return
-		}
-
-		result.result, result.Err = cmd.Exec(args)
-		if result.Err != nil {
-			result.Err = NewCommandError(command, err)
-			yield(result)
-
-			return
-		}
-
-		result.Resend = cmd.Resend()
-
-		if !yield(result) {
-			return
-		}
-
-		switch p := cmd.(type) {
-		case CmdPsync:
-			if !yield(
-				&CommandResult{result: p.RenderFile(), KeepConnection: true},
-			) {
 				return
+			}
+
+			cmd := parsed.cmd
+
+			result.result, result.Err = cmd.Exec(parsed.args)
+			if err := result.Err; err != nil {
+				result.Err = NewCommandError(command, err)
+				yield(result)
+
+				return
+			}
+
+			result.Resend = cmd.Resend()
+
+			if !yield(result) {
+				return
+			}
+
+			switch p := cmd.(type) {
+			case CmdPsync:
+				if !yield(
+					&CommandResult{result: p.RenderFile(), KeepConnection: true},
+				) {
+					return
+				}
 			}
 		}
 	}
