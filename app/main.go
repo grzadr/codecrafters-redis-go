@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultTcpBuffer            = 4096
+	defaultTcpBuffer            = 64 * 1024
 	defaultErrorChannelCapacity = 4
 )
 
