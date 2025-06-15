@@ -131,16 +131,9 @@ func parseCommand(
 	}
 
 	return func(yield func(ParsedCommand) bool) {
-		tokens, err := rheltypes.NewTokenIterator(command)
-		if err != nil {
-			yield(ParsedCommand{
-				err: wrap(fmt.Errorf("tokenization error: %w", err)),
-			})
+		tokens := rheltypes.NewTokenIterator(command)
 
-			return
-		}
-
-		for tokens.Left() > 0 {
+		for !tokens.IsDone() {
 			rawValue, err := rheltypes.RhelEncode(tokens)
 			if err != nil {
 				yield(ParsedCommand{

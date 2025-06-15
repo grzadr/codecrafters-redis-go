@@ -10,7 +10,10 @@ import (
 	"strconv"
 )
 
-type Token []byte
+type Token struct {
+	Prefix rhelPrefix
+	Data   []byte
+}
 
 func (t Token) Prefix() rhelPrefix {
 	for _, p := range rhelPrefixIndex {
@@ -42,6 +45,9 @@ func (t Token) ReadSize(prefix rhelPrefix) (size int, err error) {
 	}
 
 	return
+}
+
+func NewToken() (token Token, err error) {
 }
 
 const defaultIteratorBufferSize = 256
