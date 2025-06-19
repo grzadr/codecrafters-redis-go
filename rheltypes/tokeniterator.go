@@ -8,47 +8,43 @@ import (
 	"io"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 type Token struct {
 	Prefix rhelPrefix
-	Data   []byte
+	Data   string
 }
 
-func (t Token) Prefix() rhelPrefix {
-	for _, p := range rhelPrefixIndex {
-		if bytes.HasPrefix(t, []byte(p)) {
-			return p
-		}
-	}
-
-	return rhelPrefix(t)
-}
-
-func (t Token) CutPrefix(prefix rhelPrefix) (token Token, ok bool) {
-	return bytes.CutPrefix(t, []byte(prefix))
-}
-
-func (t Token) ReadSize(prefix rhelPrefix) (size int, err error) {
-	sizeBytes, found := t.CutPrefix(prefix)
-	if !found {
-		return 0, NewPrefixError(prefix, rhelPrefix(sizeBytes))
-	}
-
-	size, err = strconv.Atoi(string(sizeBytes))
-	if err != nil {
-		return 0, fmt.Errorf(
-			"failed to convert %q into size: %w",
-			sizeBytes,
-			err,
-		)
-	}
+func NewToken(str string) (token Token) {
+	before, _ := strings.CutSuffix(str, string(rhelFieldSep))
+	token.Prefix = NewRhelPrefix(before[:1])
+	token.Data = before[1:]
 
 	return
 }
 
-func NewToken() (token Token, err error) {
+func (t Token) AsSize() (int, error) {
+	return strconv.Atoi(t.Data)
 }
+
+// func (t Token) ReadSize(prefix rhelPrefix) (size int, err error) {
+// 	sizeBytes, found := t.CutPrefix(prefix)
+// 	if !found {
+// 		return 0, NewPrefixError(prefix, rhelPrefix(sizeBytes))
+// 	}
+
+// 	size, err = strconv.Atoi(string(sizeBytes))
+// 	if err != nil {
+// 		return 0, fmt.Errorf(
+// 			"failed to convert %q into size: %w",
+// 			sizeBytes,
+// 			err,
+// 		)
+// 	}
+
+// 	return
+// }
 
 const defaultIteratorBufferSize = 256
 
@@ -126,6 +122,7 @@ type TokenIterator struct {
 	// content [][]byte
 	// index   int
 	*BuffIterator
+	LastToken Token
 }
 
 func NewTokenIterator(content []byte) *TokenIterator {
@@ -178,13 +175,18 @@ func (i *TokenIterator) Read(size int) (tokens []Token, ok bool) {
 	return
 }
 
-func (i *TokenIterator) Next() (token Token, ok bool) {
-	if ok = i.Skip(1); !ok {
+func (i *TokenIterator) Next() (token Token, err error) {
+	str, err := i.readString(rhelFieldSep)
+	if err != nil {
 		return
 	}
 
-	token = Token(i.content[i.index-1])
-
+	token = NewToken(str)
+	i.LastToken = token
+	// if ok = i.Skip(1); !ok {
+	// 	return
+	// }
+	// token = Token(i.content[i.index-1])
 	return
 }
 

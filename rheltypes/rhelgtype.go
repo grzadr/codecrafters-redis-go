@@ -18,17 +18,27 @@ type RhelType interface {
 type rhelPrefix string
 
 var (
+	UnknownPrefix      = rhelPrefix("")
 	SimpleStringPrefix = rhelPrefix("+")
 	BulkStringPrefix   = rhelPrefix("$")
 	ArrayPrefix        = rhelPrefix("*")
 	IntegerPrefix      = rhelPrefix(":")
-	rhelPrefixIndex    = []rhelPrefix{
-		SimpleStringPrefix,
-		BulkStringPrefix,
-		ArrayPrefix,
-		IntegerPrefix,
-	}
+	// rhelPrefixIndex    = []rhelPrefix{
+	// 	SimpleStringPrefix,
+	// 	BulkStringPrefix,
+	// 	ArrayPrefix,
+	// 	IntegerPrefix,
+	// }.
 )
+
+func NewRhelPrefix(p string) rhelPrefix {
+	switch rhelPrefix(p) {
+	case SimpleStringPrefix, BulkStringPrefix, ArrayPrefix, IntegerPrefix:
+		return rhelPrefix(p)
+	default:
+		return UnknownPrefix
+	}
+}
 
 type PrefixError struct {
 	expected rhelPrefix
@@ -45,12 +55,17 @@ func NewPrefixError(expected, detected rhelPrefix) error {
 }
 
 func RhelEncode(iter *TokenIterator) (RhelType, error) {
-	switch p := iter.Current().Prefix(); p {
+	switch p := iter.LastToken.Prefix; p {
 	case ArrayPrefix:
 		return NewArrayFromTokens(iter)
 	case SimpleStringPrefix:
 		return NewSimpleStringFromTokens(iter)
 	case BulkStringPrefix:
+		bytes, err := NewBytesFromTokens(iter)
+		if err != nil {
+			return nil, err
+		}
+
 		return NewBulkStringFromTokens(iter)
 	case IntegerPrefix:
 		return NewIntegerFromTokens(iter)
