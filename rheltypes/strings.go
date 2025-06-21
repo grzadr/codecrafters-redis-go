@@ -2,6 +2,7 @@ package rheltypes
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 )
 
@@ -49,6 +50,14 @@ func NewBulkString(str string) (bs BulkString) {
 	return
 }
 
+func NewBulkStringFromBytes(b []byte) (bs BulkString) {
+	bs.Length = len(b)
+	bs.Text = b
+	bs.terminated = false
+
+	return
+}
+
 func NewBulkStringFromTokens(
 	token Token,
 	iter *TokenIterator,
@@ -73,10 +82,13 @@ func NewBulkStringFromTokens(
 
 	bs.terminated, err = iter.skipDelim(rhelFieldDelim)
 	if err != nil {
-		return bs, fmt.Errorf("failed to read following field delimiter: %w")
+		return bs, fmt.Errorf(
+			"failed to read following field delimiter: %w",
+			err,
+		)
 	}
 
-	return
+	return bs, err
 }
 
 func NewNullBulkString() BulkString {
@@ -98,15 +110,37 @@ func (s BulkString) Size() int {
 }
 
 func (s BulkString) Serialize() []byte {
-	buf := make([]byte, 0, s.Size())
+	switch s.Length {
+	case -1:
+		return slices.Concat(
+			[]byte(BulkStringPrefix),
+			[]byte("-1"),
+			rhelFieldDelim,
+		)
+	case 0:
+		return slices.Concat(
+			[]byte(BulkStringPrefix),
+			[]byte("0"),
+			rhelFieldDelim,
+			rhelFieldDelim,
+		)
+	default:
+		buf := make([]byte, 0, s.Size())
+		buf = fmt.Appendf(
+			buf,
+			"%s%s\r\n",
+			BulkStringPrefix,
+			strconv.Itoa(s.Length),
+		)
 
-	buf = fmt.Appendf(buf, "%s%s\r\n", BulkStringPrefix, strconv.Itoa(s.Length))
+		if s.terminated {
+			buf = fmt.Appendf(buf, "%s\r\n", s.Text)
+		} else {
+			buf = slices.Concat(buf, s.Text)
+		}
 
-	if s.Length > -1 {
-		buf = fmt.Appendf(buf, "%s\r\n", s.Text)
+		return buf
 	}
-
-	return buf
 }
 
 func (s BulkString) String() string {

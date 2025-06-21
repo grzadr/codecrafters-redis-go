@@ -18,28 +18,24 @@ func NewArrayFromStrings(values []string) (a Array) {
 	return
 }
 
-func NewArrayFromTokens(token Token, iter *TokenIterator) (Array, error) {
-	bs.Length, err = token.AsSize()
+func NewArrayFromTokens(token Token, iter *TokenIterator) (a Array, err error) {
+	length, err := token.AsSize()
 	if err != nil {
-		return bs, fmt.Errorf("failed to init bul string: %w", err)
+		return nil, fmt.Errorf("failed to init bul string: %w", err)
 	}
 
-	size, err := tokens.NextSize(ArrayPrefix)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create array: %w", err)
-	}
+	a = make(Array, 0, length)
 
-	output := make(Array, 0, size)
-
-	for range size {
-		if value, err := RhelEncode(tokens); err != nil {
+	for range length {
+		value, err := RhelEncode(iter)
+		if err != nil {
 			return nil, fmt.Errorf("failed to create array: %w", err)
-		} else {
-			output = append(output, value)
 		}
+
+		a = append(a, value)
 	}
 
-	return output, nil
+	return
 }
 
 func (a Array) Size() int {

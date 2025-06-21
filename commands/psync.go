@@ -43,5 +43,5 @@ func (c CmdPsync) RenderFile() (content rheltypes.RhelType) {
 	internal.NewRdbfFile().WriteContent(buf)
 	buf.Flush()
 
-	return rheltypes.Bytes(buffer.Bytes())
+	return rheltypes.NewBulkStringFromBytes(buffer.Bytes())
 }

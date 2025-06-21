@@ -57,7 +57,7 @@ func NewPrefixError(expected, detected rhelPrefix) error {
 func RhelEncode(iter *TokenIterator) (RhelType, error) {
 	token, err := iter.NextToken()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read next token: %w")
+		return nil, fmt.Errorf("failed to read next token: %w", err)
 	}
 
 	switch token.Prefix {
