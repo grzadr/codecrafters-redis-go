@@ -3,7 +3,6 @@ package rheltypes
 import (
 	"bufio"
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"slices"
@@ -17,15 +16,24 @@ type Token struct {
 }
 
 func NewToken(str string) (token Token) {
-	before, _ := strings.CutSuffix(str, string(rhelFieldSep))
+	before, _ := strings.CutSuffix(str, string(rhelFieldDelim))
 	token.Prefix = NewRhelPrefix(before[:1])
 	token.Data = before[1:]
 
 	return
 }
 
-func (t Token) AsSize() (int, error) {
-	return strconv.Atoi(t.Data)
+func (t Token) ToString() string {
+	return fmt.Sprintf("%s%s", t.Prefix, t.Data)
+}
+
+func (t Token) AsSize() (i int, err error) {
+	i, err = strconv.Atoi(t.Data)
+	if err != nil {
+		err = fmt.Errorf("failed to convert token %s to size: %w", t, err)
+	}
+
+	return
 }
 
 // func (t Token) ReadSize(prefix rhelPrefix) (size int, err error) {
@@ -66,40 +74,59 @@ func (r *BuffIterator) IsDone() bool {
 	return r.done
 }
 
-func (r *BuffIterator) validate(err error, n int) error {
+func (r *BuffIterator) validate(err error) error {
 	switch err {
 	case io.EOF:
 		r.done = true
 	case nil:
 	default:
-		return fmt.Errorf("failed to read %d bytes: %w", n, err)
+		return err
 	}
 
 	return nil
 }
 
-func (r *BuffIterator) readBytes(n int) ([]byte, error) {
-	buf := make([]byte, n)
-
-	b, err := r.buf.Read(buf)
-	if err := r.validate(err, n); err != nil {
-		return nil, err
+func (r *BuffIterator) readBytes(n int) (b []byte, err error) {
+	if r.IsDone() {
+		return
 	}
 
-	return buf[:b], err
-}
+	b = make([]byte, n)
 
-func (r *BuffIterator) readByte() (b byte, err error) {
-	b, err = r.buf.ReadByte()
-
-	if err := r.validate(err, 1); err != nil {
-		return 0, err
+	rn, err := r.buf.Read(b)
+	if err := r.validate(err); err != nil {
+		return nil, fmt.Errorf("failed to read %d bytes: %w", n, err)
 	}
+
+	b = b[:rn]
 
 	return
 }
 
+// func (r *BuffIterator) readByte() (b byte, err error) {
+// 	if r.IsDone() {
+// 		return
+// 	}
+
+// 	b, err = r.buf.ReadByte()
+
+// 	if err := r.validate(err); err != nil {
+// 		return 0, fmt.Errorf("failed to read byte: %w", err)
+// 	}
+
+// 	return
+// }
+
+func identicalSlices(a, b []byte) bool {
+	// return slices.Compare(buf[len(buf)-delimLen:], delim) == 0
+	return slices.Compare(a, b) == 0
+}
+
 func (r *BuffIterator) readString(delim []byte) (out string, err error) {
+	if r.IsDone() {
+		return
+	}
+
 	buf := make([]byte, 0, defaultIteratorBufferSize)
 	delimLen := len(delim)
 	d := delim[delimLen-1]
@@ -108,9 +135,9 @@ func (r *BuffIterator) readString(delim []byte) (out string, err error) {
 		temp, err := r.buf.ReadBytes(d)
 		buf = append(buf, temp...)
 
-		if err = r.validate(err, -1); err != nil || r.IsDone() {
+		if err = r.validate(err); err != nil || r.IsDone() {
 			break
-		} else if slices.Compare(buf[len(buf)-delimLen:], delim) == 0 {
+		} else if identicalSlices(buf[len(buf)-delimLen:], delim) {
 			break
 		}
 	}
@@ -118,11 +145,26 @@ func (r *BuffIterator) readString(delim []byte) (out string, err error) {
 	return
 }
 
+func (r *BuffIterator) skipDelim(delim []byte) (ok bool, err error) {
+	b, err := r.buf.Peek(len(delim))
+
+	if err = r.validate(err); err != nil {
+		return ok, fmt.Errorf(
+			"failed to skip delim %q %X: %w",
+			delim,
+			delim,
+			err,
+		)
+	}
+
+	return identicalSlices(b, delim), nil
+}
+
 type TokenIterator struct {
 	// content [][]byte
 	// index   int
 	*BuffIterator
-	LastToken Token
+	// LastToken Token
 }
 
 func NewTokenIterator(content []byte) *TokenIterator {
@@ -159,30 +201,30 @@ func NewTokenIterator(content []byte) *TokenIterator {
 // 	return i.content[i.index]
 // }
 
-func (i *TokenIterator) Read(size int) (tokens []Token, ok bool) {
-	if ok = i.Skip(size); !ok {
-		return
-	}
+// func (i *TokenIterator) Read(size int) (tokens []Token, ok bool) {
+// 	// if ok = i.Skip(size); !ok {
+// 	// 	return
+// 	// }
 
-	data := (i.content[i.index-size : i.index])
+// 	data := (i.content[i.index-size : i.index])
 
-	tokens = make([]Token, len(data))
+// 	tokens = make([]Token, len(data))
 
-	for i, d := range data {
-		tokens[i] = Token(d)
-	}
+// 	for i, d := range data {
+// 		tokens[i] = Token(d)
+// 	}
 
-	return
-}
+// 	return
+// }
 
-func (i *TokenIterator) Next() (token Token, err error) {
-	str, err := i.readString(rhelFieldSep)
+func (i *TokenIterator) NextToken() (token Token, err error) {
+	str, err := i.readString(rhelFieldDelim)
 	if err != nil {
 		return
 	}
 
 	token = NewToken(str)
-	i.LastToken = token
+	// i.LastToken = token
 	// if ok = i.Skip(1); !ok {
 	// 	return
 	// }
@@ -190,26 +232,26 @@ func (i *TokenIterator) Next() (token Token, err error) {
 	return
 }
 
-func (i *TokenIterator) NextSize(prefix rhelPrefix) (size int, err error) {
-	sizeToken, ok := i.Next()
-	if !ok {
-		return 0, fmt.Errorf("failed to read size token")
-	}
+// func (i *TokenIterator) NextSize(prefix rhelPrefix) (size int, err error) {
+// 	sizeToken, ok := i.Next()
+// 	if !ok {
+// 		return 0, fmt.Errorf("failed to read size token")
+// 	}
 
-	return sizeToken.ReadSize(prefix)
-}
+// 	return sizeToken.ReadSize(prefix)
+// }
 
-func (i TokenIterator) Content() []byte {
-	return bytes.Join(i.content, rhelFieldSep)
-}
+// func (i TokenIterator) Content() []byte {
+// 	return bytes.Join(i.content, rhelFieldSep)
+// }
 
-func (i TokenIterator) Dump() string {
-	data := i.Content()
+// func (i TokenIterator) Dump() string {
+// 	data := i.Content()
 
-	return fmt.Sprintf(
-		"index: %d | %q\n%s",
-		i.index,
-		string(data),
-		hex.Dump(data),
-	)
-}
+// 	return fmt.Sprintf(
+// 		"index: %d | %q\n%s",
+// 		i.index,
+// 		string(data),
+// 		hex.Dump(data),
+// 	)
+// }

@@ -7,22 +7,12 @@ import (
 
 type SimpleString string
 
-func NewSimpleStringFromTokens(iter *TokenIterator) (SimpleString, error) {
-	first, ok := iter.Read(1)
-	if !ok {
-		return "", fmt.Errorf("failed to read value token")
-	}
-
-	value, found := first[0].CutPrefix(SimpleStringPrefix)
-	if !found {
-		return "", NewPrefixError(SimpleStringPrefix, rhelPrefix(first[0]))
-	}
-
-	return SimpleString(string(value)), nil
+func NewSimpleStringFromTokens(token Token) (SimpleString, error) {
+	return SimpleString(token.Data), nil
 }
 
 func (s SimpleString) Size() int {
-	return len(s) + len(SimpleStringPrefix) + len(rhelFieldSep)
+	return len(s) + len(SimpleStringPrefix) + len(rhelFieldDelim)
 }
 
 func (s SimpleString) Serialize() []byte {
@@ -46,31 +36,45 @@ func (s SimpleString) Integer() (num int, err error) {
 func (s SimpleString) isRhelType() {}
 
 type BulkString struct {
-	Length int
-	Text   string
+	Length     int
+	Text       []byte
+	terminated bool
 }
 
 func NewBulkString(str string) (bs BulkString) {
 	bs.Length = len(str)
-	bs.Text = str
+	bs.Text = []byte(str)
+	bs.terminated = true
 
 	return
 }
 
-func NewBulkStringFromTokens(tokens *TokenIterator) (bs BulkString, err error) {
-	bs.Length, err = tokens.NextSize(BulkStringPrefix)
+func NewBulkStringFromTokens(
+	token Token,
+	iter *TokenIterator,
+) (bs BulkString, err error) {
+	bs.Length, err = token.AsSize()
 	if err != nil {
-		return bs, fmt.Errorf("failed to create bulk string: %w", err)
-	}
-
-	valueToken, ok := tokens.Next()
-	if !ok {
 		return bs, fmt.Errorf(
-			"failed to create bulk string: failed to read value token",
+			"failed to read bul string size from %q: %w",
+			token,
+			err,
 		)
 	}
 
-	bs.Text = string(valueToken)
+	bs.Text, err = iter.readBytes(bs.Length)
+	if err != nil {
+		return bs, fmt.Errorf(
+			"failed to read %d bulk content bytes: %w",
+			bs.Length,
+			err,
+		)
+	}
+
+	bs.terminated, err = iter.skipDelim(rhelFieldDelim)
+	if err != nil {
+		return bs, fmt.Errorf("failed to read following field delimiter: %w")
+	}
 
 	return
 }
@@ -87,9 +91,9 @@ func (s BulkString) Size() int {
 	) + len(
 		sizeStr,
 	) + len(
-		rhelFieldSep,
+		rhelFieldDelim,
 	) + max(s.Length, 0) + len(
-		rhelFieldSep,
+		rhelFieldDelim,
 	)
 }
 

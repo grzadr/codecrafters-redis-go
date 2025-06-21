@@ -7,34 +7,13 @@ import (
 
 type Integer int
 
-func NewIntegerFromTokens(tokens *TokenIterator) (i Integer, err error) {
-	wrap := func(err error) error {
-		if err != nil {
-			return fmt.Errorf("failed to create integer: %w", err)
-		}
-
-		return nil
-	}
-	numToken, ok := tokens.Next()
-
-	if !ok {
-		return i, wrap(fmt.Errorf("failed to load next token"))
-	}
-
-	numToken, ok = numToken.CutPrefix(IntegerPrefix)
-
-	if !ok {
-		return i, wrap(NewPrefixError(IntegerPrefix, rhelPrefix(numToken)))
-	}
-
-	value, err := strconv.Atoi(string(numToken))
+func NewIntegerFromTokens(token Token) (i Integer, err error) {
+	val, err := token.AsSize()
 	if err != nil {
-		return i, wrap(
-			fmt.Errorf("failed to convert integer %q: %w", numToken, err),
-		)
+		return i, fmt.Errorf("failed to convert to integer %q: %w", token, err)
 	}
 
-	i = Integer(value)
+	i = Integer(val)
 
 	return
 }
@@ -47,7 +26,7 @@ func (i Integer) Size() int {
 	) + len(
 		sizeStr,
 	) + len(
-		rhelFieldSep,
+		rhelFieldDelim,
 	)
 }
 

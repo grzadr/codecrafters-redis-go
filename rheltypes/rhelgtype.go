@@ -4,7 +4,7 @@ import (
 	"fmt"
 )
 
-var rhelFieldSep = []byte("\r\n")
+var rhelFieldDelim = []byte("\r\n")
 
 type RhelType interface {
 	isRhelType()
@@ -55,21 +55,21 @@ func NewPrefixError(expected, detected rhelPrefix) error {
 }
 
 func RhelEncode(iter *TokenIterator) (RhelType, error) {
-	switch p := iter.LastToken.Prefix; p {
-	case ArrayPrefix:
-		return NewArrayFromTokens(iter)
-	case SimpleStringPrefix:
-		return NewSimpleStringFromTokens(iter)
-	case BulkStringPrefix:
-		bytes, err := NewBytesFromTokens(iter)
-		if err != nil {
-			return nil, err
-		}
+	token, err := iter.NextToken()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read next token: %w")
+	}
 
-		return NewBulkStringFromTokens(iter)
+	switch token.Prefix {
+	case ArrayPrefix:
+		return NewArrayFromTokens(token, iter)
+	case SimpleStringPrefix:
+		return NewSimpleStringFromTokens(token)
+	case BulkStringPrefix:
+		return NewBulkStringFromTokens(token, iter)
 	case IntegerPrefix:
-		return NewIntegerFromTokens(iter)
+		return NewIntegerFromTokens(token)
 	default:
-		return nil, fmt.Errorf("unknown prefix %s", string(p))
+		return nil, fmt.Errorf("unknown prefix %s", token)
 	}
 }

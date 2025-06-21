@@ -18,7 +18,12 @@ func NewArrayFromStrings(values []string) (a Array) {
 	return
 }
 
-func NewArrayFromTokens(tokens *TokenIterator) (Array, error) {
+func NewArrayFromTokens(token Token, iter *TokenIterator) (Array, error) {
+	bs.Length, err = token.AsSize()
+	if err != nil {
+		return bs, fmt.Errorf("failed to init bul string: %w", err)
+	}
+
 	size, err := tokens.NextSize(ArrayPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create array: %w", err)
@@ -45,7 +50,7 @@ func (a Array) Size() int {
 
 	sizeStr := len(strconv.Itoa(len(a)))
 
-	return len(ArrayPrefix) + sizeStr + len(rhelFieldSep) + size
+	return len(ArrayPrefix) + sizeStr + len(rhelFieldDelim) + size
 }
 
 func (a Array) Serialize() []byte {
@@ -53,7 +58,7 @@ func (a Array) Serialize() []byte {
 
 	buf = append(buf, ArrayPrefix...)
 	buf = append(buf, strconv.Itoa(len(a))...)
-	buf = append(buf, rhelFieldSep...)
+	buf = append(buf, rhelFieldDelim...)
 
 	for _, element := range a {
 		buf = append(buf, element.Serialize()...)
