@@ -60,6 +60,10 @@ func RhelEncode(iter *TokenIterator) (RhelType, error) {
 		return nil, fmt.Errorf("failed to read next token: %w", err)
 	}
 
+	if iter.IsDone() {
+		return nil, nil
+	}
+
 	switch token.Prefix {
 	case ArrayPrefix:
 		return NewArrayFromTokens(token, iter)
@@ -70,6 +74,6 @@ func RhelEncode(iter *TokenIterator) (RhelType, error) {
 	case IntegerPrefix:
 		return NewIntegerFromTokens(token)
 	default:
-		return nil, fmt.Errorf("unknown prefix %s", token)
+		return nil, fmt.Errorf("unknown prefix %q", token)
 	}
 }

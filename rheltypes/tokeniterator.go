@@ -164,7 +164,13 @@ func (r *BuffIterator) skipDelim(delim []byte) (ok bool, err error) {
 		)
 	}
 
-	return identicalSlices(b, delim), nil
+	if ok = identicalSlices(b, delim); !ok {
+		return
+	}
+
+	_, err = r.buf.Discard(len(delim))
+
+	return
 }
 
 type TokenIterator struct {
@@ -226,7 +232,7 @@ func NewTokenIterator(content []byte) *TokenIterator {
 
 func (i *TokenIterator) NextToken() (token Token, err error) {
 	str, err := i.readString(rhelFieldDelim)
-	if err != nil {
+	if err != nil || i.IsDone() {
 		return
 	}
 

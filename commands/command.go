@@ -158,6 +158,15 @@ func parseCommand(
 				}) {
 					return
 				}
+			case rheltypes.BulkString:
+				if value.IsTerminated() {
+					yield(ParsedCommand{
+						err: wrap(fmt.Errorf("expected not terminated bulk string: %q", value)),
+					})
+
+					return
+				}
+
 			default:
 				yield(ParsedCommand{
 					err: wrap(fmt.Errorf("expected array, got %T", value)),

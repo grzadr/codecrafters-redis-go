@@ -154,4 +154,8 @@ func (s BulkString) First() RhelType {
 func (s BulkString) Integer() (num int, err error) {
 	return strconv.Atoi(string(s.Text))
 }
+
+func (s BulkString) IsTerminated() bool {
+	return s.terminated
+}
 func (s BulkString) isRhelType() {}
