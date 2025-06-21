@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"iter"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -122,6 +123,8 @@ type ParsedCommand struct {
 func parseCommand(
 	command []byte,
 ) iter.Seq[ParsedCommand] {
+	log.Println("command:\n", hex.Dump(command))
+
 	wrap := func(newErr error) error {
 		if newErr != nil {
 			return fmt.Errorf("error in parseCommand: %w", newErr)
@@ -133,13 +136,17 @@ func parseCommand(
 	return func(yield func(ParsedCommand) bool) {
 		tokens := rheltypes.NewTokenIterator(command)
 
-		for !tokens.IsDone() {
+		for {
 			rawValue, err := rheltypes.RhelEncode(tokens)
 			if err != nil {
 				yield(ParsedCommand{
 					err: wrap(fmt.Errorf("encoding error: %w", err)),
 				})
 
+				return
+			}
+
+			if tokens.IsDone() {
 				return
 			}
 
