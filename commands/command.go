@@ -121,18 +121,16 @@ type ParsedCommand struct {
 	size int
 }
 
+func NewParsedCommandErr(err error) (parsed ParsedCommand) {
+	parsed.err = fmt.Errorf("failed to parse command: %w", err)
+
+	return
+}
+
 func parseCommand(
 	command []byte,
 ) iter.Seq[ParsedCommand] {
 	log.Println("command:\n", hex.Dump(command))
-
-	wrap := func(newErr error) error {
-		if newErr != nil {
-			return fmt.Errorf("error in parseCommand: %w", newErr)
-		}
-
-		return nil
-	}
 
 	return func(yield func(ParsedCommand) bool) {
 		tokens := rheltypes.NewTokenIterator(command)
@@ -142,9 +140,9 @@ func parseCommand(
 		for {
 			rawValue, err := rheltypes.RhelEncode(tokens)
 			if err != nil {
-				yield(ParsedCommand{
-					err: wrap(fmt.Errorf("encoding error: %w", err)),
-				})
+				yield(
+					NewParsedCommandErr(fmt.Errorf("encoding error: %w", err)),
+				)
 
 				return
 			}
@@ -167,17 +165,24 @@ func parseCommand(
 				}
 			case rheltypes.BulkString:
 				if value.IsTerminated() {
-					yield(ParsedCommand{
-						err: wrap(fmt.Errorf("expected not terminated bulk string: %q", value)),
-					})
+					yield(
+						NewParsedCommandErr(
+							fmt.Errorf(
+								"expected not terminated bulk string: %q",
+								value,
+							),
+						),
+					)
 
 					return
 				}
+			case rheltypes.SimpleString:
+				continue
 
 			default:
-				yield(ParsedCommand{
-					err: wrap(fmt.Errorf("expected array, got %T", value)),
-				})
+				yield(NewParsedCommandErr(
+					fmt.Errorf("expected array, got %T", value),
+				))
 
 				return
 			}

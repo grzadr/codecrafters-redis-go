@@ -173,10 +173,44 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 			return fmt.Errorf("failed to read %s response: %w", cmd.label, err)
 		}
 
+		if cmd.label != "psync" {
+			continue
+		}
+
+		if err = replicaExecuteCommand(c, response[:n]); err != nil {
+			return err
+		}
+
 		log.Printf("received %q (%d): %q", cmd.label, n, response[:n])
 	}
 
 	return err
+}
+
+func replicaExecuteCommand(conn *net.TCPConn, cmd []byte) error {
+	for result := range commands.ExecuteCommand(cmd) {
+		log.Println(result)
+
+		if result.Err != nil {
+			return result.Err
+		}
+
+		connection.GetOffsetTracker().Add(result.Size)
+
+		if !result.ReplicaRespond {
+			log.Println("no replica response needed")
+
+			continue
+		}
+
+		log.Println("responding")
+
+		if err := sendResponse(conn, result); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func acceptMasterTCP(master, port string, errCh chan error) {
@@ -203,31 +237,28 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 			return
 		}
 
-		for result := range commands.ExecuteCommand(cmd) {
-			log.Println(result)
+		if err := replicaExecuteCommand(conn, cmd); err != nil {
+			errCh <- err
 
-			if err := result.Err; err != nil {
-				errCh <- err
-
-				return
-			}
-
-			if !result.ReplicaRespond {
-				log.Println("no replica response needed")
-
-				continue
-			}
-
-			log.Println("responding")
-
-			if err := sendResponse(conn, result); err != nil {
-				errCh <- err
-
-				return
-			}
-
-			connection.GetOffsetTracker().Add(result.Size)
+			return
 		}
+		//	for result := range commands.ExecuteCommand(cmd) {
+		//		log.Println(result)
+		//		if err := result.Err; err != nil {
+		//			errCh <- err
+		//			return
+		//		}
+		//		connection.GetOffsetTracker().Add(result.Size)
+		//		if !result.ReplicaRespond {
+		//			log.Println("no replica response needed")
+		//			continue
+		//		}
+		//		log.Println("responding")
+		//		if err := sendResponse(conn, result); err != nil {
+		//			errCh <- err
+		//			return
+		//		}
+		//	}
 	}
 }
 
