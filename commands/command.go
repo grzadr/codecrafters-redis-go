@@ -148,7 +148,7 @@ func parseCommand(
 			}
 
 			size := tokens.Offset() - offset
-			offset += tokens.Offset()
+			offset = tokens.Offset()
 
 			if tokens.IsDone() {
 				return
