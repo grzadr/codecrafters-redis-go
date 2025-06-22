@@ -104,6 +104,7 @@ var commandMap = map[string]func() RhelCommand{
 	"INFO":     func() RhelCommand { return NewCmdInfo() },
 	"REPLCONF": func() RhelCommand { return NewCmdReplconf() },
 	"PSYNC":    func() RhelCommand { return NewCmdPsync() },
+	"WAIT":     func() RhelCommand { return NewCmdWait() },
 }
 
 func NewRhelCommand(name string) RhelCommand {
