@@ -128,7 +128,8 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 			}
 
 			if result.Resend {
-				pool.Resend(cmd, errCh)
+				log.Println("resending")
+				pool.Resend(result.Serialize(), errCh, result.ReplicaRespond)
 			}
 		}
 	}
@@ -242,23 +243,6 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 
 			return
 		}
-		//	for result := range commands.ExecuteCommand(cmd) {
-		//		log.Println(result)
-		//		if err := result.Err; err != nil {
-		//			errCh <- err
-		//			return
-		//		}
-		//		connection.GetOffsetTracker().Add(result.Size)
-		//		if !result.ReplicaRespond {
-		//			log.Println("no replica response needed")
-		//			continue
-		//		}
-		//		log.Println("responding")
-		//		if err := sendResponse(conn, result); err != nil {
-		//			errCh <- err
-		//			return
-		//		}
-		//	}
 	}
 }
 

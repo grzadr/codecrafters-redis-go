@@ -2,15 +2,22 @@ package connection
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"sync"
+	"time"
 )
 
-const defaultConnectionCapacity = 16
+const (
+	defaultConnectionCapacity = 16
+	defaultTcpBuffer          = 64 * 1024
+	defaultReadTimeout        = 100 * time.Millisecond
+)
 
 type ConnectionPool struct {
-	connections []net.Conn
-	mutex       sync.Mutex
+	connections  []net.Conn
+	mutex        sync.Mutex
+	acknowledged int
 }
 
 func NewConnectionPool() *ConnectionPool {
@@ -42,7 +49,7 @@ func (p *ConnectionPool) CloseAlls() {
 	p = NewConnectionPool()
 }
 
-func (p *ConnectionPool) Resend(cmd []byte, errCh chan error) {
+func (p *ConnectionPool) Resend(cmd []byte, errCh chan error, respond bool) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -53,6 +60,38 @@ func (p *ConnectionPool) Resend(cmd []byte, errCh chan error) {
 			break
 		}
 	}
+
+	if !respond {
+		return
+	}
+
+	buf := make([]byte, defaultConnectionCapacity)
+
+	received := make(map[string]struct{}, p.NumConnections())
+
+	log.Println("waiting for replicas response")
+
+	for _, conn := range p.connections {
+		addr := conn.RemoteAddr().String()
+		if _, ok := received[addr]; ok {
+			continue
+		}
+
+		if err := conn.SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil {
+			errCh <- fmt.Errorf("error setting read timeout: %w", err)
+		}
+
+		_, err := conn.Read(buf)
+		if err != nil {
+			errCh <- fmt.Errorf("error reading replica response: %w", err)
+
+			break
+		}
+
+		received[addr] = struct{}{}
+	}
+
+	p.acknowledged = len(received)
 }
 
 func (p *ConnectionPool) NumConnections() int {
@@ -60,6 +99,13 @@ func (p *ConnectionPool) NumConnections() int {
 	defer p.mutex.Unlock()
 
 	return len(p.connections)
+}
+
+func (p *ConnectionPool) NumAcknowledged() int {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	return p.acknowledged
 }
 
 func GetConnectionPool() *ConnectionPool {
