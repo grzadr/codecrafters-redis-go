@@ -163,20 +163,7 @@ func parseCommand(
 				}) {
 					return
 				}
-			case rheltypes.BulkString:
-				if value.IsTerminated() {
-					yield(
-						NewParsedCommandErr(
-							fmt.Errorf(
-								"expected not terminated bulk string: %q",
-								value,
-							),
-						),
-					)
-
-					return
-				}
-			case rheltypes.SimpleString:
+			case rheltypes.SimpleString, rheltypes.BulkString:
 				continue
 
 			default:
