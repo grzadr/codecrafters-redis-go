@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"strconv"
 	"strings"
 
+	"github.com/codecrafters-io/redis-starter-go/connection"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -20,7 +22,9 @@ func (c CmdReplconf) Exec(
 	subcommand := strings.ToUpper(args.First().String())
 	switch subcommand {
 	case "GETACK":
-		return c.Render("ACK", "0"), nil
+		offset := connection.GetOffsetTracker().Current()
+
+		return c.Render("ACK", strconv.Itoa(offset)), nil
 	default:
 		return rheltypes.NewBulkString("OK"), nil
 	}

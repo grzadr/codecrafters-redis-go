@@ -7,51 +7,15 @@ import (
 	"log"
 	"net"
 	"strings"
-	"sync"
 
 	"github.com/codecrafters-io/redis-starter-go/commands"
+	"github.com/codecrafters-io/redis-starter-go/connection"
 )
 
 const (
 	defaultTcpBuffer            = 64 * 1024
 	defaultErrorChannelCapacity = 4
 )
-
-var (
-	connections []net.Conn
-	connMutex   sync.Mutex
-)
-
-func addConnection(conn net.Conn) {
-	connMutex.Lock()
-	defer connMutex.Unlock()
-
-	connections = append(connections, conn)
-}
-
-func closeAllConnections() {
-	connMutex.Lock()
-	defer connMutex.Unlock()
-
-	for _, conn := range connections {
-		conn.Close()
-	}
-
-	connections = nil
-}
-
-func resendCommand(cmd []byte, errCh chan error) {
-	connMutex.Lock()
-	defer connMutex.Unlock()
-
-	for _, conn := range connections {
-		if _, err := conn.Write(cmd); err != nil {
-			errCh <- fmt.Errorf("error resending data: %w", err)
-
-			break
-		}
-	}
-}
 
 func listenTcp(address, port string) *net.TCPListener {
 	ip, err := net.ResolveTCPAddr("tcp", fmt.Sprintf("%s:%s", address, port))
@@ -83,7 +47,7 @@ func dialTcp(address, port string) *net.TCPConn {
 
 func clean() {
 	commands.CloseMaps()
-	closeAllConnections()
+	connection.GetConnectionPool().CloseAlls()
 }
 
 func handleErrors(errCh chan error) {
@@ -122,6 +86,8 @@ func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, end bool) {
 		cmd = buf[:n]
 	}
 
+	log.Printf("read cmd: %q\n", cmd)
+
 	return
 }
 
@@ -155,12 +121,14 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 				return
 			}
 
+			pool := connection.GetConnectionPool()
+
 			if keep = result.KeepConnection; keep {
-				addConnection(conn)
+				pool.Add(conn)
 			}
 
 			if result.Resend {
-				resendCommand(cmd, errCh)
+				pool.Resend(cmd, errCh)
 			}
 		}
 	}
@@ -193,15 +161,19 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 	response := make([]byte, defaultTcpBuffer)
 
 	for _, cmd := range handshakeCommands {
+		log.Printf("sending %q: %q", cmd.label, cmd.cmd)
+
 		_, err = c.Write(cmd.cmd)
 		if err != nil {
 			return fmt.Errorf("failed to send %s: %w", cmd.label, err)
 		}
 
-		_, err := c.Read(response)
+		n, err := c.Read(response)
 		if err != nil {
 			return fmt.Errorf("failed to read %s response: %w", cmd.label, err)
 		}
+
+		log.Printf("received %q (%d): %q", cmd.label, n, response[:n])
 	}
 
 	return err
@@ -219,7 +191,11 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 
 	if err := sendHandshake(conn, port); err != nil {
 		errCh <- fmt.Errorf("error during master handshake: %w", err)
+
+		return
 	}
+
+	log.Println("handshake complete")
 
 	for {
 		cmd, done := readCommand(conn, errCh)
@@ -249,6 +225,8 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 
 				return
 			}
+
+			connection.GetOffsetTracker().Add(result.Size)
 		}
 	}
 }

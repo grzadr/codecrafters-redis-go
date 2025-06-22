@@ -58,8 +58,9 @@ func (t Token) AsSize() (i int, err error) {
 const defaultIteratorBufferSize = 256
 
 type BuffIterator struct {
-	buf  *bufio.Reader
-	done bool
+	buf    *bufio.Reader
+	done   bool
+	offset int
 }
 
 func NewBuffIterator(data []byte) (iter *BuffIterator) {
@@ -69,6 +70,10 @@ func NewBuffIterator(data []byte) (iter *BuffIterator) {
 	}
 
 	return
+}
+
+func (r *BuffIterator) Offset() int {
+	return r.offset
 }
 
 func (r *BuffIterator) IsDone() bool {
@@ -100,6 +105,8 @@ func (r *BuffIterator) readBytes(n int) (b []byte, err error) {
 	}
 
 	b = b[:rn]
+
+	r.offset += rn
 
 	return
 }
@@ -136,6 +143,7 @@ func (r *BuffIterator) readString(delim []byte) (out string, err error) {
 
 	for {
 		temp, err := r.buf.ReadBytes(d)
+		r.offset += len(temp)
 		buf = append(buf, temp...)
 
 		// log.Println("buf: ")
@@ -168,7 +176,9 @@ func (r *BuffIterator) skipDelim(delim []byte) (ok bool, err error) {
 		return
 	}
 
-	_, err = r.buf.Discard(len(delim))
+	n, err := r.buf.Discard(len(delim))
+
+	r.offset += n
 
 	return
 }

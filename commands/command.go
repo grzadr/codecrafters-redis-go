@@ -118,6 +118,7 @@ type ParsedCommand struct {
 	cmd  RhelCommand
 	args rheltypes.Array
 	err  error
+	size int
 }
 
 func parseCommand(
@@ -136,6 +137,8 @@ func parseCommand(
 	return func(yield func(ParsedCommand) bool) {
 		tokens := rheltypes.NewTokenIterator(command)
 
+		offset := tokens.Offset()
+
 		for {
 			rawValue, err := rheltypes.RhelEncode(tokens)
 			if err != nil {
@@ -146,6 +149,9 @@ func parseCommand(
 				return
 			}
 
+			size := tokens.Offset() - offset
+			offset += tokens.Offset()
+
 			if tokens.IsDone() {
 				return
 			}
@@ -155,6 +161,7 @@ func parseCommand(
 				if !yield(ParsedCommand{
 					cmd:  NewRhelCommand(value[0].String()),
 					args: value[1:],
+					size: size,
 				}) {
 					return
 				}
@@ -184,6 +191,7 @@ type CommandResult struct {
 	Resend         bool
 	ReplicaRespond bool
 	Err            error
+	Size           int
 }
 
 func (r CommandResult) Serialize() []byte {
@@ -217,6 +225,7 @@ func ExecuteCommand(command []byte) iter.Seq[*CommandResult] {
 
 			result.Resend = cmd.Resend()
 			result.ReplicaRespond = cmd.ReplicaRespond()
+			result.Size = parsed.size
 
 			if !yield(result) {
 				return
