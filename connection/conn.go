@@ -55,6 +55,13 @@ func (p *ConnectionPool) Resend(cmd []byte, errCh chan error) {
 	}
 }
 
+func (p *ConnectionPool) NumConnections() int {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	return len(p.connections)
+}
+
 func GetConnectionPool() *ConnectionPool {
 	poolOnce.Do(func() {
 		pool = NewConnectionPool()

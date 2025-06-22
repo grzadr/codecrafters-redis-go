@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"github.com/codecrafters-io/redis-starter-go/connection"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -15,7 +16,9 @@ func NewCmdWait() CmdWait {
 func (c CmdWait) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	return rheltypes.Integer(0), nil
+	return rheltypes.Integer(
+		connection.GetConnectionPool().NumConnections(),
+	), nil
 }
 
 func (c CmdWait) Render(id, offset string) (cmd rheltypes.Array) {
