@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"log"
 	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/connection"
@@ -24,13 +23,21 @@ func (c CmdWait) Exec(
 	required, _ := args.At(0).Integer()
 	timeout, _ := args.At(1).Integer()
 
-	log.Printf("WAIT for %d or %d mili", required, timeout)
-
 	if required == 0 {
 		return rheltypes.Integer(0), nil
 	}
 
 	conn := connection.GetConnectionPool()
+
+	if conn.NumResend() == 0 {
+		return rheltypes.Integer(conn.NumAcknowledged()), nil
+	}
+
+	conn.Resend(
+		NewCmdReplconf().Render("GETACK", "*").Serialize(),
+		true,
+	)
+
 	result := make(chan int, 1)
 
 	go func() {
@@ -44,13 +51,11 @@ func (c CmdWait) Exec(
 		for {
 			select {
 			case <-after:
-				log.Println("WAIT timeout")
 				result <- conn.NumAcknowledged()
 
 				return
 			case <-ticker.C:
 				if ack := conn.NumAcknowledged(); ack >= required {
-					log.Printf("ack passed: %d", ack)
 					result <- ack
 
 					return
@@ -60,8 +65,6 @@ func (c CmdWait) Exec(
 	}()
 
 	acknowledged := <-result
-
-	log.Printf("acknowledged %d\n", acknowledged)
 
 	return rheltypes.Integer(
 		acknowledged,

@@ -91,8 +91,41 @@ func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, end bool) {
 	return
 }
 
+func masterExecuteCommand(
+	conn *net.TCPConn,
+	cmd []byte,
+) (keepConn bool, err error) {
+	for result := range commands.ExecuteCommand(cmd) {
+		if err = sendResponse(conn, result); err != nil {
+			return
+		}
+
+		pool := connection.GetConnectionPool()
+
+		if keep := result.KeepConnection; keep && !keepConn {
+			keepConn = true
+
+			pool.Add(conn)
+		}
+
+		if result.Resend {
+			if err = pool.Resend(cmd, false); err != nil {
+				return
+			}
+		}
+
+		if result.Ack != 0 {
+			pool.Ack(conn.RemoteAddr().String(), result.Ack)
+		}
+	}
+
+	return
+}
+
 func handleConn(conn *net.TCPConn, errCh chan error) {
 	var keep bool
+
+	var err error
 
 	defer func() {
 		if keep {
@@ -110,43 +143,15 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 			return
 		}
 
-		for result := range commands.ExecuteCommand(cmd) {
-			if err := result.Err; err != nil {
-				errCh <- err
+		if keep, err = masterExecuteCommand(conn, cmd); err != nil {
+			errCh <- err
 
-				return
-			} else if err := sendResponse(conn, result); err != nil {
-				errCh <- err
-
-				return
-			}
-
-			pool := connection.GetConnectionPool()
-
-			if keep = result.KeepConnection; keep {
-				pool.Add(conn)
-			}
-
-			if result.Resend {
-				ackCmd := commands.NewCmdReplconf().
-					Render("GETACK", "*").
-					Serialize()
-
-				if err := pool.Resend(cmd, ackCmd); err != nil {
-					errCh <- err
-
-					return
-				}
-			}
-
-			if result.Ack != 0 {
-				pool.Ack(conn.RemoteAddr().String(), result.Ack)
-			}
+			return
 		}
 	}
 }
 
-func sendHandshake(c *net.TCPConn, port string) (err error) {
+func sendHandshake(conn *net.TCPConn, port string) (err error) {
 	handshakeCommands := []struct {
 		label string
 		cmd   []byte
@@ -173,14 +178,12 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 	response := make([]byte, defaultTcpBuffer)
 
 	for _, cmd := range handshakeCommands {
-		log.Printf("sending %q: %q", cmd.label, cmd.cmd)
-
-		_, err = c.Write(cmd.cmd)
+		_, err = conn.Write(cmd.cmd)
 		if err != nil {
 			return fmt.Errorf("failed to send %s: %w", cmd.label, err)
 		}
 
-		n, err := c.Read(response)
+		n, err := conn.Read(response)
 		if err != nil {
 			return fmt.Errorf("failed to read %s response: %w", cmd.label, err)
 		}
@@ -189,11 +192,9 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 			continue
 		}
 
-		if err = replicaExecuteCommand(c, response[:n]); err != nil {
+		if err = replicaExecuteCommand(conn, response[:n]); err != nil {
 			return err
 		}
-
-		log.Printf("received %q (%d): %q", cmd.label, n, response[:n])
 	}
 
 	return err
@@ -201,8 +202,6 @@ func sendHandshake(c *net.TCPConn, port string) (err error) {
 
 func replicaExecuteCommand(conn *net.TCPConn, cmd []byte) error {
 	for result := range commands.ExecuteCommand(cmd) {
-		log.Println(result)
-
 		if result.Err != nil {
 			return result.Err
 		}
@@ -210,12 +209,8 @@ func replicaExecuteCommand(conn *net.TCPConn, cmd []byte) error {
 		connection.GetOffsetTracker().Add(result.Size)
 
 		if !result.ReplicaRespond {
-			log.Println("no replica response needed")
-
 			continue
 		}
-
-		log.Println("responding")
 
 		if err := sendResponse(conn, result); err != nil {
 			return err
@@ -240,8 +235,6 @@ func acceptMasterTCP(master, port string, errCh chan error) {
 
 		return
 	}
-
-	log.Println("handshake complete")
 
 	for {
 		cmd, done := readCommand(conn, errCh)
