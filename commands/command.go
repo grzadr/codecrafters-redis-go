@@ -107,6 +107,7 @@ var commandMap = map[string]func() RhelCommand{
 	"TYPE":     func() RhelCommand { return NewCmdType() },
 	"WAIT":     func() RhelCommand { return NewCmdWait() },
 	"XADD":     func() RhelCommand { return NewCmdXAdd() },
+	"XRANGE":   func() RhelCommand { return NewCmdXRange() },
 }
 
 func NewRhelCommand(name string) RhelCommand {

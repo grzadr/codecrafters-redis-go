@@ -2,6 +2,7 @@ package rheltypes
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,9 +27,10 @@ var (
 type IdGeneration int
 
 const (
-	GenerateNext IdGeneration = iota
-	GenerateNextSeq
+	AutoIncrement IdGeneration = iota
+	AutoIncrementSeq
 	Explicit
+	OnlyTs
 )
 
 type StreamItemId struct {
@@ -39,7 +41,7 @@ type StreamItemId struct {
 func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
 	idType = Explicit
 	if query == "*" {
-		idType = GenerateNext
+		idType = AutoIncrement
 
 		return
 	}
@@ -47,10 +49,14 @@ func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
 	ts, seq, _ := strings.Cut(query, defaultIdSep)
 	id.ts, _ = strconv.Atoi(ts)
 
-	if seq == "*" {
-		idType = GenerateNextSeq
+	switch seq {
+	case "*":
+		idType = AutoIncrementSeq
 		id.seq = -1
-	} else {
+	case "":
+		idType = OnlyTs
+		id.seq = -1
+	default:
 		id.seq, _ = strconv.Atoi(seq)
 	}
 
@@ -137,7 +143,7 @@ func (s *Stream) GenerateId(query string) (id StreamItemId, err error) {
 		if !lastId.Less(id) {
 			return id, wrongIdError
 		}
-	case GenerateNextSeq:
+	case AutoIncrementSeq:
 		if lastId.ts == id.ts {
 			id = lastId.NextSeq()
 		} else if lastId.ts < id.ts {
@@ -145,7 +151,7 @@ func (s *Stream) GenerateId(query string) (id StreamItemId, err error) {
 		} else {
 			return id, wrongIdError
 		}
-	case GenerateNext:
+	case AutoIncrement:
 		id = lastId.Next()
 	}
 
@@ -200,6 +206,34 @@ func (s Stream) TypeName() string {
 
 func (s Stream) Integer() (int, error) {
 	return 0, nil
+}
+
+func (s Stream) Range(lower, upper string) (a Array) {
+	lowerId, _ := NewStreamItemId(lower)
+	upperId, _ := NewStreamItemId(upper)
+
+	if lowerId.ts > upperId.ts ||
+		lowerId.ts == upperId.ts && lowerId.seq > upperId.seq {
+		return
+	}
+
+	lowerIndex, _ := slices.BinarySearchFunc(
+		s,
+		lowerId,
+		func(item StreamItem, id StreamItemId) int {
+			return 0
+		},
+	)
+
+	upperIndex, _ := slices.BinarySearchFunc(
+		s,
+		lowerId,
+		func(item StreamItem, id StreamItemId) int {
+			return 0
+		},
+	)
+
+	return a[lowerIndex : upperIndex+1]
 }
 
 func (s Stream) isRhelType() {}
