@@ -32,6 +32,8 @@ const (
 	ExplicitId IdGeneration = iota
 	BlankId
 	BlankTsId
+	BeginId
+	EndId
 )
 
 type StreamItemId struct {
@@ -40,20 +42,30 @@ type StreamItemId struct {
 }
 
 func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
-	idType = ExplicitId
-	if query == "*" {
+	switch query {
+	case "*":
 		idType = BlankId
+	case "-":
+		idType = BeginId
+	case "+":
+		idType = EndId
+		id.ts = -1
+		id.seq = -1
+	default:
+		idType = ExplicitId
+	}
 
+	if idType != ExplicitId {
 		return
 	}
 
 	ts, seq, _ := strings.Cut(query, defaultIdSep)
 	id.ts, _ = strconv.Atoi(ts)
+	id.seq = -1
 
 	switch seq {
 	case "*", "":
 		idType = BlankTsId
-		id.seq = -1
 	default:
 		id.seq, _ = strconv.Atoi(seq)
 	}
@@ -86,6 +98,10 @@ func (id StreamItemId) ToString() string {
 }
 
 func (id StreamItemId) Cmp(other StreamItemId) int {
+	if other.ts == -1 {
+		return -1
+	}
+
 	if id.ts != other.ts {
 		return cmp.Compare(id.ts, other.ts)
 	}
@@ -223,29 +239,36 @@ func helperItemIdCompare(item StreamItem, id StreamItemId) int {
 }
 
 func (s Stream) Range(lower, upper string) Stream {
-	lowerId, _ := NewStreamItemId(lower)
-	upperId, _ := NewStreamItemId(upper)
+	lowerId, lowerIdType := NewStreamItemId(lower)
+	upperId, upperIdType := NewStreamItemId(upper)
 
 	lowerId.seq = max(lowerId.seq, 0)
 
-	lowerIndex, lowerFound := slices.BinarySearchFunc(
-		s,
-		lowerId,
-		helperItemIdCompare,
-	)
+	lowerIndex := 0
+	found := false
 
-	upperIndex, upperFound := slices.BinarySearchFunc(
-		s,
-		upperId,
-		helperItemIdCompare,
-	)
-
-	if !lowerFound {
-		lowerIndex++
+	if lowerIdType != BeginId {
+		lowerIndex, found = slices.BinarySearchFunc(
+			s,
+			lowerId,
+			helperItemIdCompare,
+		)
+		if !found {
+			lowerIndex++
+		}
 	}
 
-	if upperFound {
-		upperIndex++
+	upperIndex := len(s)
+
+	if upperIdType != EndId {
+		upperIndex, found = slices.BinarySearchFunc(
+			s,
+			upperId,
+			helperItemIdCompare,
+		)
+		if found {
+			upperIndex++
+		}
 	}
 
 	return s[lowerIndex:upperIndex]
