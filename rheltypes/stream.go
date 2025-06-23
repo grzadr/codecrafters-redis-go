@@ -254,7 +254,8 @@ func (s Stream) Range(lower, upper string) Stream {
 			lowerId,
 			helperItemIdCompare,
 		)
-		if !found {
+
+		if !found && lowerIndex < len(s)-1 {
 			lowerIndex++
 		}
 	}
