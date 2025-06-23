@@ -2,24 +2,28 @@ package commands
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
+const defaultXAddSliceSize = 2
+
 type CmdXAddArgs struct {
 	Key   string
 	Id    string
-	Items rheltypes.Array
+	Items map[string]string
 }
 
 func NewXAddArgs(args rheltypes.Array) (parsed CmdXAddArgs, err error) {
-	// 	setKey := args.At(0)
-	// 	if setKey == nil {
-	// 		return parsed, fmt.Errorf("missing key")
-	// 	}
 	parsed.Key = args.At(0).String()
 	parsed.Id = args.At(1).String()
-	parsed.Items = args[2:]
+	items := args[2:]
+	parsed.Items = make(map[string]string, len(items)/defaultXAddSliceSize)
+
+	for pair := range slices.Chunk(items, defaultXAddSliceSize) {
+		parsed.Items[pair[0].String()] = pair[1].String()
+	}
 
 	return
 }
@@ -40,7 +44,6 @@ func (c CmdXAdd) Exec(
 		return nil, c.ErrWrap(err)
 	}
 
-	item := rheltypes.NewStreamItemFromArray(parsedArgs.Id, parsedArgs.Items)
 	instance := GetDataMapInstance()
 
 	value, found := instance.Get(parsedArgs.Key)
@@ -55,7 +58,9 @@ func (c CmdXAdd) Exec(
 		return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
 	}
 
-	stream = append(stream, item)
+	if err := stream.Add(parsedArgs.Id, parsedArgs.Items); err != nil {
+		return rheltypes.NewGenericError(err), nil
+	}
 
 	instance.Set(parsedArgs.Key, stream)
 
