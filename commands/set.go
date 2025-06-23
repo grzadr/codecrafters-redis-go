@@ -101,5 +101,3 @@ func (c CmdSet) Exec(
 }
 
 func (c CmdSet) Resend() bool { return true }
-
-func (c CmdSet) ReplicaRespond() bool { return true }

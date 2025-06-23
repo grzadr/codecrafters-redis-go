@@ -21,15 +21,20 @@ func NewCmdWait() CmdWait {
 func (c CmdWait) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	log.Println(args.String())
-	required, _ := args.At(1).Integer()
+	required, _ := args.At(0).Integer()
 	timeout, _ := args.At(1).Integer()
 
+	log.Printf("WAIT for %d or %d mili", required, timeout)
+
+	if required == 0 {
+		return rheltypes.Integer(0), nil
+	}
+
 	conn := connection.GetConnectionPool()
-	c1 := make(chan int, 1)
+	result := make(chan int, 1)
 
 	go func() {
-		defer close(c1)
+		defer close(result)
 
 		after := time.After(time.Duration(timeout) * time.Millisecond)
 
@@ -39,13 +44,14 @@ func (c CmdWait) Exec(
 		for {
 			select {
 			case <-after:
-				c1 <- conn.NumAcknowledged()
+				log.Println("WAIT timeout")
+				result <- conn.NumAcknowledged()
 
 				return
 			case <-ticker.C:
-				acknowledged := conn.NumAcknowledged()
-				if acknowledged >= required {
-					c1 <- acknowledged
+				if ack := conn.NumAcknowledged(); ack >= required {
+					log.Printf("ack passed: %d", ack)
+					result <- ack
 
 					return
 				}
@@ -53,7 +59,7 @@ func (c CmdWait) Exec(
 		}
 	}()
 
-	acknowledged := <-c1
+	acknowledged := <-result
 
 	log.Printf("acknowledged %d\n", acknowledged)
 

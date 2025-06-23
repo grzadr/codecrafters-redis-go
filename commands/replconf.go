@@ -2,7 +2,6 @@ package commands
 
 import (
 	"strconv"
-	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/connection"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
@@ -19,12 +18,13 @@ func NewCmdReplconf() CmdReplconf {
 func (c CmdReplconf) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	subcommand := strings.ToUpper(args.First().String())
-	switch subcommand {
+	switch args.Cmd() {
 	case "GETACK":
 		offset := connection.GetOffsetTracker().Current()
 
 		return c.Render("ACK", strconv.Itoa(offset)), nil
+	case "ACK":
+		return nil, nil
 	default:
 		return rheltypes.NewBulkString("OK"), nil
 	}

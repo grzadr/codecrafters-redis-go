@@ -10,19 +10,20 @@ import (
 
 const (
 	defaultConnectionCapacity = 16
-	defaultTcpBuffer          = 64 * 1024
-	defaultReadTimeout        = 100 * time.Millisecond
+	defaultTcpReadBuffer      = 64 * 1024
+	defaultReadTimeout        = 50 * time.Millisecond
 )
 
 type ConnectionPool struct {
 	connections  []net.Conn
 	mutex        sync.Mutex
-	acknowledged int
+	acknowledged map[string]int
 }
 
 func NewConnectionPool() *ConnectionPool {
 	return &ConnectionPool{
-		connections: make([]net.Conn, 0, defaultConnectionCapacity),
+		connections:  make([]net.Conn, 0, defaultConnectionCapacity),
+		acknowledged: make(map[string]int, defaultConnectionCapacity),
 	}
 }
 
@@ -36,6 +37,7 @@ func (p *ConnectionPool) Add(conn net.Conn) {
 	defer p.mutex.Unlock()
 
 	p.connections = append(p.connections, conn)
+	p.acknowledged[conn.RemoteAddr().String()] = 0
 }
 
 func (p *ConnectionPool) CloseAlls() {
@@ -49,64 +51,80 @@ func (p *ConnectionPool) CloseAlls() {
 	p = NewConnectionPool()
 }
 
-func (p *ConnectionPool) Resend(cmd []byte, errCh chan error, respond bool) {
+func (p *ConnectionPool) ResetAck() {
+	p.acknowledged = make(map[string]int, defaultConnectionCapacity)
+}
+
+func (p *ConnectionPool) Ack(addr string, ack int) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
+	p.acknowledged[addr] = ack
+}
+
+func (p *ConnectionPool) Resend(cmd, ackCmd []byte) error {
+	p.mutex.Lock()
+	defer p.mutex.Unlock()
+
+	log.Printf("resending %q\n", cmd)
+
+	p.ResetAck()
 
 	for _, conn := range p.connections {
 		if _, err := conn.Write(cmd); err != nil {
-			errCh <- fmt.Errorf("error resending data: %w", err)
+			return fmt.Errorf("error resending cmd %q: %w", cmd, err)
+		}
 
-			break
+		if _, err := conn.Write(ackCmd); err != nil {
+			return fmt.Errorf("error sending %q: %w", ackCmd, err)
 		}
 	}
 
-	if !respond {
-		return
-	}
+	log.Printf("completed resending %q\n", cmd)
 
-	buf := make([]byte, defaultConnectionCapacity)
-
-	received := make(map[string]struct{}, p.NumConnections())
-
-	log.Println("waiting for replicas response")
-
-	for _, conn := range p.connections {
-		addr := conn.RemoteAddr().String()
-		if _, ok := received[addr]; ok {
-			continue
-		}
-
-		if err := conn.SetReadDeadline(time.Now().Add(defaultReadTimeout)); err != nil {
-			errCh <- fmt.Errorf("error setting read timeout: %w", err)
-		}
-
-		_, err := conn.Read(buf)
-		if err != nil {
-			errCh <- fmt.Errorf("error reading replica response: %w", err)
-
-			break
-		}
-
-		received[addr] = struct{}{}
-	}
-
-	p.acknowledged = len(received)
+	return nil
 }
 
-func (p *ConnectionPool) NumConnections() int {
-	p.mutex.Lock()
-	defer p.mutex.Unlock()
+// func (p *ConnectionPool) NumConnections() int {
+// 	p.mutex.Lock()
+// 	defer p.mutex.Unlock()
 
-	return len(p.connections)
-}
+// 	return len(p.connections)
+// }
 
 func (p *ConnectionPool) NumAcknowledged() int {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
-	return p.acknowledged
+	return len(p.acknowledged)
 }
+
+// func (p *ConnectionPool) readWithTimeout(
+// 	conn net.Conn,
+// 	buf []byte,
+// 	timeout time.Duration,
+// ) (int, error) {
+// 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+// 	defer cancel()
+
+// 	type result struct {
+// 		n   int
+// 		err error
+// 	}
+
+// 	resultCh := make(chan result, 1)
+
+// 	go func() {
+// 		n, err := conn.Read(buf)
+// 		resultCh <- result{n: n, err: err}
+// 	}()
+
+// 	select {
+// 	case res := <-resultCh:
+// 		return res.n, res.err
+// 	case <-ctx.Done():
+// 		return 0, nil
+// 	}
+// }
 
 func GetConnectionPool() *ConnectionPool {
 	poolOnce.Do(func() {

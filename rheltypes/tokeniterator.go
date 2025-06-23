@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"slices"
 	"strconv"
 	"strings"
@@ -132,8 +131,6 @@ func identicalSlices(a, b []byte) bool {
 
 func (r *BuffIterator) readString(delim []byte) (out string, err error) {
 	if r.IsDone() {
-		log.Println("buffer is done")
-
 		return
 	}
 
@@ -145,8 +142,6 @@ func (r *BuffIterator) readString(delim []byte) (out string, err error) {
 		temp, err := r.buf.ReadBytes(d)
 		r.offset += len(temp)
 		buf = append(buf, temp...)
-
-		// log.Println("buf: ")
 
 		if err = r.validate(err); err != nil || r.IsDone() {
 			break
@@ -245,8 +240,6 @@ func (i *TokenIterator) NextToken() (token Token, err error) {
 	if err != nil || i.IsDone() {
 		return
 	}
-
-	log.Printf("token: %q\n", str)
 
 	token = NewToken(str)
 	// i.LastToken = token

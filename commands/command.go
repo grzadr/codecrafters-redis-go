@@ -120,23 +120,51 @@ type ParsedCommand struct {
 	args rheltypes.Array
 	err  error
 	size int
+	ack  int
 }
 
-func NewParsedCommandErr(err error) (parsed ParsedCommand) {
-	parsed.err = fmt.Errorf("failed to parse command: %w", err)
+func NewParsedCommandErr(err error) (parsed *ParsedCommand) {
+	parsed = &ParsedCommand{err: fmt.Errorf("failed to parse command: %w", err)}
+
+	return
+}
+
+func NewParsedCommand(raw rheltypes.RhelType) (parsed *ParsedCommand) {
+	switch value := raw.(type) {
+	case rheltypes.Array:
+		parsed = &ParsedCommand{
+			cmd:  NewRhelCommand(value[0].String()),
+			args: value[1:],
+			size: value.Size(),
+		}
+
+		switch parsed.cmd.(type) {
+		case CmdReplconf:
+			if parsed.args.Cmd() == "ACK" {
+				parsed.ack, parsed.err = parsed.args.At(1).Integer()
+			}
+		}
+
+	case rheltypes.SimpleString, rheltypes.BulkString:
+
+	default:
+		parsed = NewParsedCommandErr(
+			fmt.Errorf("expected array, got %T", value),
+		)
+	}
 
 	return
 }
 
 func parseCommand(
 	command []byte,
-) iter.Seq[ParsedCommand] {
-	log.Println("command:\n", hex.Dump(command))
+) iter.Seq[*ParsedCommand] {
+	log.Printf("command:\n%s", hex.Dump(command))
 
-	return func(yield func(ParsedCommand) bool) {
+	return func(yield func(*ParsedCommand) bool) {
 		tokens := rheltypes.NewTokenIterator(command)
 
-		offset := tokens.Offset()
+		// offset := tokens.Offset()
 
 		for {
 			rawValue, err := rheltypes.RhelEncode(tokens)
@@ -148,30 +176,20 @@ func parseCommand(
 				return
 			}
 
-			size := tokens.Offset() - offset
-			offset = tokens.Offset()
+			// size := tokens.Offset() - offset
+			// = tokens.Offset()
 
 			if tokens.IsDone() {
 				return
 			}
 
-			switch value := rawValue.(type) {
-			case rheltypes.Array:
-				if !yield(ParsedCommand{
-					cmd:  NewRhelCommand(value[0].String()),
-					args: value[1:],
-					size: size,
-				}) {
-					return
-				}
-			case rheltypes.SimpleString, rheltypes.BulkString:
+			parsed := NewParsedCommand(rawValue)
+
+			if parsed == nil {
 				continue
+			}
 
-			default:
-				yield(NewParsedCommandErr(
-					fmt.Errorf("expected array, got %T", value),
-				))
-
+			if !yield(parsed) || parsed.err != nil {
 				return
 			}
 		}
@@ -185,6 +203,7 @@ type CommandResult struct {
 	ReplicaRespond bool
 	Err            error
 	Size           int
+	Ack            int
 }
 
 func (r CommandResult) Serialize() []byte {
@@ -219,6 +238,7 @@ func ExecuteCommand(command []byte) iter.Seq[*CommandResult] {
 			result.Resend = cmd.Resend()
 			result.ReplicaRespond = cmd.ReplicaRespond()
 			result.Size = parsed.size
+			result.Ack = parsed.ack
 
 			if !yield(result) {
 				return

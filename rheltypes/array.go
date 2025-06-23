@@ -92,4 +92,8 @@ func (a Array) At(index int) RhelType {
 
 func (a Array) Integer() (int, error) { return 0, nil }
 
+func (a Array) Cmd() string {
+	return strings.ToUpper(a.First().String())
+}
+
 func (a Array) isRhelType() {}

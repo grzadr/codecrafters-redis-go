@@ -128,8 +128,19 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 			}
 
 			if result.Resend {
-				log.Println("resending")
-				pool.Resend(result.Serialize(), errCh, result.ReplicaRespond)
+				ackCmd := commands.NewCmdReplconf().
+					Render("GETACK", "*").
+					Serialize()
+
+				if err := pool.Resend(cmd, ackCmd); err != nil {
+					errCh <- err
+
+					return
+				}
+			}
+
+			if result.Ack != 0 {
+				pool.Ack(conn.RemoteAddr().String(), result.Ack)
 			}
 		}
 	}
