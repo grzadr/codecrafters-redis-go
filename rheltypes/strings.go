@@ -19,7 +19,7 @@ func (s SimpleString) Size() int {
 func (s SimpleString) Serialize() []byte {
 	buf := make([]byte, 0, s.Size())
 
-	return fmt.Appendf(buf, "+%s\r\n", s)
+	return fmt.Appendf(buf, "%s%s\r\n", SimpleStringPrefix, s)
 }
 
 func (s SimpleString) String() string {

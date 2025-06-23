@@ -19,17 +19,12 @@ type RhelType interface {
 type rhelPrefix string
 
 var (
-	UnknownPrefix      = rhelPrefix("")
-	SimpleStringPrefix = rhelPrefix("+")
-	BulkStringPrefix   = rhelPrefix("$")
 	ArrayPrefix        = rhelPrefix("*")
+	BulkStringPrefix   = rhelPrefix("$")
+	ErrorPrefix        = rhelPrefix("-")
 	IntegerPrefix      = rhelPrefix(":")
-	// rhelPrefixIndex    = []rhelPrefix{
-	// 	SimpleStringPrefix,
-	// 	BulkStringPrefix,
-	// 	ArrayPrefix,
-	// 	IntegerPrefix,
-	// }.
+	SimpleStringPrefix = rhelPrefix("+")
+	UnknownPrefix      = rhelPrefix("")
 )
 
 func NewRhelPrefix(p string) rhelPrefix {
@@ -75,6 +70,6 @@ func RhelEncode(iter *TokenIterator) (RhelType, error) {
 	case IntegerPrefix:
 		return NewIntegerFromTokens(token)
 	default:
-		return nil, fmt.Errorf("unknown prefix %q", token)
+		return nil, fmt.Errorf("unsupported prefix %q", token)
 	}
 }
