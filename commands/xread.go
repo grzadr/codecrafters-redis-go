@@ -15,21 +15,24 @@ func NewCmdXRead() CmdXRead {
 	return CmdXRead{BaseCommand: BaseCommand("XREAD")}
 }
 
-// const (
-// 	posXRangeKey   = 0
-// 	posXRangeLower = 1
-// 	posXRangeUpper = 2
-// )
+const (
+	numXReadStreamSections = 2
+	numXReadValueSections  = 2
 
-type CmdXReadStreams struct {
+	// posXRangeKey   = 0
+	// posXRangeLower = 1
+	// posXRangeUpper = 2.
+)
+
+type CmdXReadStream struct {
 	key string
-	id string
+	id  string
 }
 
 type CmdXReadArgs struct {
-	block int
+	block   int
 	newOnly bool
-	streams []CmdXReadStreams
+	streams []CmdXReadStream
 }
 
 func NewCmdXReadArgs(args rheltypes.Array) (parsed CmdXReadArgs) {
@@ -42,55 +45,83 @@ func NewCmdXReadArgs(args rheltypes.Array) (parsed CmdXReadArgs) {
 		lastIndex--
 	}
 
-	readBlock := false
-
 	args = args[:lastIndex]
 
-	streamsIndex := 0
+	streamsIndex := -1
+
+	var readInteger *int
 
 	for i, a := range args[:lastIndex] {
-		switch strings.ToUpper(a) {
+		switch strings.ToUpper(a.String()) {
 		case "BLOCK":
-			readBlock = true
+			readInteger = &parsed.block
+
 			continue
 		case "STREAMS":
 			streamsIndex = i + 1
-			break
 		}
-		if readBlock {
-			parsed.block = a.Integer()
+
+		if readInteger != nil {
+			*readInteger, _ = a.Integer()
+			readInteger = nil
+		}
+
+		if streamsIndex != -1 {
+			break
 		}
 	}
 
+	args = args[streamsIndex:]
 
+	half := len(args) / numXReadStreamSections
 
+	parsed.streams = make([]CmdXReadStream, half)
+
+	for i := range half {
+		parsed.streams[i] = CmdXReadStream{
+			key: args[i].String(),
+			id:  args[i+half].String(),
+		}
+	}
+
+	return parsed
 }
 
 func (c CmdXRead) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
+	parsedArgs := NewCmdXReadArgs(args)
 
-	parsedArgs =
+	valueArray := make(rheltypes.Array, len(parsedArgs.streams))
 
-	key := args.At(posXRangeKey).String()
-	got, found := GetDataMapInstance().Get(key)
+	for s, streamSpec := range parsedArgs.streams {
+		streamArray := make(rheltypes.Array, numXReadValueSections)
 
-	if !found {
-		return make(rheltypes.Array, 0), nil
+		streamArray[0] = rheltypes.NewBulkString(streamSpec.key)
+
+		got, found := GetDataMapInstance().Get(streamSpec.key)
+
+		if !found {
+			return nil, c.ErrWrap(
+				fmt.Errorf("stream %q not found", streamSpec.key),
+			)
+		}
+
+		stream, ok := got.(rheltypes.Stream)
+
+		if !ok {
+			return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
+		}
+
+		streamArray[1] = stream.Range(
+			streamSpec.id,
+			"+",
+		).ToArray()
+
+		valueArray[s] = streamArray
 	}
 
-	var stream rheltypes.Stream
+	value = valueArray
 
-	var ok bool
-
-	if stream, ok = got.(rheltypes.Stream); !ok {
-		return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
-	}
-
-	value = stream.Range(
-		args.At(posXRangeLower).String(),
-		,
-	).ToArray()
-
-	return
+	return value, err
 }

@@ -21,7 +21,7 @@ var (
 		"The ID specified in XADD is equal or smaller than the target stream top item",
 	)
 
-	ZeroIdError = fmt.Errorf(
+	zeroIdError = fmt.Errorf(
 		"The ID specified in XADD must be greater than 0-0",
 	)
 )
@@ -30,6 +30,7 @@ type IdGeneration int
 
 const (
 	ExplicitId IdGeneration = iota
+	ZeroId
 	BlankId
 	BlankTsId
 	BeginId
@@ -43,10 +44,12 @@ type StreamItemId struct {
 
 func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
 	switch query {
+	case "0-0":
+		idType = ZeroId
 	case "*":
 		idType = BlankId
 	case "-":
-		idType = BeginId
+		idType = ZeroId
 	case "+":
 		idType = EndId
 		id.ts = -1
@@ -56,7 +59,7 @@ func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
 	}
 
 	if idType != ExplicitId {
-		return
+		return id, idType
 	}
 
 	ts, seq, _ := strings.Cut(query, defaultIdSep)
@@ -70,7 +73,7 @@ func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
 		id.seq, _ = strconv.Atoi(seq)
 	}
 
-	return
+	return id, idType
 }
 
 func (id StreamItemId) LessTs(other StreamItemId) bool {
@@ -156,15 +159,13 @@ func (s Stream) LastId() (id StreamItemId) {
 }
 
 func (s *Stream) GenerateId(query string) (id StreamItemId, err error) {
-	if query == "0-0" {
-		return id, ZeroIdError
-	}
-
 	var genType IdGeneration
 	id, genType = NewStreamItemId(query)
 	lastId := s.LastId()
 
 	switch genType {
+	case ZeroId:
+		return id, zeroIdError
 	case ExplicitId:
 		if !lastId.Less(id) {
 			return id, wrongIdError
@@ -247,7 +248,7 @@ func (s Stream) Range(lower, upper string) Stream {
 	lowerIndex := 0
 	found := false
 
-	if lowerIdType != BeginId {
+	if lowerIdType != ZeroId {
 		lowerIndex, found = slices.BinarySearchFunc(
 			s,
 			lowerId,
