@@ -122,6 +122,10 @@ func (c CmdXRead) Exec(
 		valueArray[s] = streamArray
 	}
 
+	if len(valueArray) == 0 {
+		return rheltypes.NewNullBulkString(), nil
+	}
+
 	value = valueArray
 
 	return value, err
