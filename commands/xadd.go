@@ -58,11 +58,13 @@ func (c CmdXAdd) Exec(
 		return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
 	}
 
-	if err := stream.Add(parsedArgs.Id, parsedArgs.Items); err != nil {
+	var addedId string
+
+	if addedId, err = stream.Add(parsedArgs.Id, parsedArgs.Items); err != nil {
 		return rheltypes.NewGenericError(err), nil
 	}
 
 	instance.Set(parsedArgs.Key, stream)
 
-	return rheltypes.NewBulkString(parsedArgs.Id), nil
+	return rheltypes.NewBulkString(addedId), nil
 }

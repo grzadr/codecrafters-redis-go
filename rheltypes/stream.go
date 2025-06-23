@@ -2,7 +2,6 @@ package rheltypes
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 	"time"
@@ -11,6 +10,7 @@ import (
 const (
 	streamItemSliceSize   = 2
 	defaultStreamCapacity = 256
+	defaultIdSep          = "-"
 )
 
 var (
@@ -40,16 +40,16 @@ func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
 	idType = Explicit
 	if query == "*" {
 		idType = GenerateNext
-		id.seq = 1
 
 		return
 	}
 
-	ts, seq, _ := strings.Cut(query, "-")
+	ts, seq, _ := strings.Cut(query, defaultIdSep)
 	id.ts, _ = strconv.Atoi(ts)
 
 	if seq == "*" {
 		idType = GenerateNextSeq
+		id.seq = -1
 	} else {
 		id.seq, _ = strconv.Atoi(seq)
 	}
@@ -75,6 +75,10 @@ func (id StreamItemId) NextSeq() StreamItemId {
 
 func (id StreamItemId) Next() StreamItemId {
 	return StreamItemId{int(time.Now().UnixMilli()), 0}
+}
+
+func (id StreamItemId) ToString() string {
+	return strconv.Itoa(id.ts) + defaultIdSep + strconv.Itoa(id.seq)
 }
 
 type StreamItem struct {
@@ -128,33 +132,38 @@ func (s *Stream) GenerateId(query string) (id StreamItemId, err error) {
 	id, genType = NewStreamItemId(query)
 	lastId := s.LastId()
 
-	log.Println(id, genType, lastId)
-
 	switch genType {
 	case Explicit:
 		if !lastId.Less(id) {
 			return id, wrongIdError
 		}
 	case GenerateNextSeq:
-		if !lastId.LessTs(id) {
+		if lastId.ts == id.ts {
+			id = lastId.NextSeq()
+		} else if lastId.ts < id.ts {
+			id = id.NextSeq()
+		} else {
 			return id, wrongIdError
 		}
-
-		id = lastId.NextSeq()
 	case GenerateNext:
 		id = lastId.Next()
 	}
 
-	return
+	return id, err
 }
 
-func (s *Stream) Add(idStr string, values map[string]string) (err error) {
+func (s *Stream) Add(
+	idStr string,
+	values map[string]string,
+) (added string, err error) {
 	id, err := s.GenerateId(idStr)
 	if err != nil {
-		return err
+		return
 	}
 
 	*s = append(*s, StreamItem{id: id, values: values})
+
+	added = id.ToString()
 
 	return
 }
