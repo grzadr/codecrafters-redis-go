@@ -1,6 +1,7 @@
 package rheltypes
 
 import (
+	"cmp"
 	"fmt"
 	"slices"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 const (
 	streamItemSliceSize   = 2
+	streamArrayItemSize   = 2
 	defaultStreamCapacity = 256
 	defaultIdSep          = "-"
 )
@@ -27,10 +29,9 @@ var (
 type IdGeneration int
 
 const (
-	AutoIncrement IdGeneration = iota
-	AutoIncrementSeq
-	Explicit
-	OnlyTs
+	ExplicitId IdGeneration = iota
+	BlankId
+	BlankTsId
 )
 
 type StreamItemId struct {
@@ -39,9 +40,9 @@ type StreamItemId struct {
 }
 
 func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
-	idType = Explicit
+	idType = ExplicitId
 	if query == "*" {
-		idType = AutoIncrement
+		idType = BlankId
 
 		return
 	}
@@ -50,11 +51,8 @@ func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
 	id.ts, _ = strconv.Atoi(ts)
 
 	switch seq {
-	case "*":
-		idType = AutoIncrementSeq
-		id.seq = -1
-	case "":
-		idType = OnlyTs
+	case "*", "":
+		idType = BlankTsId
 		id.seq = -1
 	default:
 		id.seq, _ = strconv.Atoi(seq)
@@ -85,6 +83,18 @@ func (id StreamItemId) Next() StreamItemId {
 
 func (id StreamItemId) ToString() string {
 	return strconv.Itoa(id.ts) + defaultIdSep + strconv.Itoa(id.seq)
+}
+
+func (id StreamItemId) Cmp(other StreamItemId) int {
+	if id.ts != other.ts {
+		return cmp.Compare(id.ts, other.ts)
+	}
+
+	if other.seq == -1 {
+		return -1
+	}
+
+	return cmp.Compare(id.seq, other.seq)
 }
 
 type StreamItem struct {
@@ -139,11 +149,11 @@ func (s *Stream) GenerateId(query string) (id StreamItemId, err error) {
 	lastId := s.LastId()
 
 	switch genType {
-	case Explicit:
+	case ExplicitId:
 		if !lastId.Less(id) {
 			return id, wrongIdError
 		}
-	case AutoIncrementSeq:
+	case BlankTsId:
 		if lastId.ts == id.ts {
 			id = lastId.NextSeq()
 		} else if lastId.ts < id.ts {
@@ -151,7 +161,7 @@ func (s *Stream) GenerateId(query string) (id StreamItemId, err error) {
 		} else {
 			return id, wrongIdError
 		}
-	case AutoIncrement:
+	case BlankId:
 		id = lastId.Next()
 	}
 
@@ -208,32 +218,63 @@ func (s Stream) Integer() (int, error) {
 	return 0, nil
 }
 
-func (s Stream) Range(lower, upper string) (a Array) {
+func helperItemIdCompare(item StreamItem, id StreamItemId) int {
+	return item.id.Cmp(id)
+}
+
+func (s Stream) Range(lower, upper string) Stream {
 	lowerId, _ := NewStreamItemId(lower)
 	upperId, _ := NewStreamItemId(upper)
 
-	if lowerId.ts > upperId.ts ||
-		lowerId.ts == upperId.ts && lowerId.seq > upperId.seq {
-		return
+	lowerId.seq = max(lowerId.seq, 0)
+
+	lowerIndex, lowerFound := slices.BinarySearchFunc(
+		s,
+		lowerId,
+		helperItemIdCompare,
+	)
+
+	upperIndex, upperFound := slices.BinarySearchFunc(
+		s,
+		upperId,
+		helperItemIdCompare,
+	)
+
+	if !lowerFound {
+		lowerIndex++
 	}
 
-	lowerIndex, _ := slices.BinarySearchFunc(
-		s,
-		lowerId,
-		func(item StreamItem, id StreamItemId) int {
-			return 0
-		},
-	)
+	if upperFound {
+		upperIndex++
+	}
 
-	upperIndex, _ := slices.BinarySearchFunc(
-		s,
-		lowerId,
-		func(item StreamItem, id StreamItemId) int {
-			return 0
-		},
-	)
+	return s[lowerIndex:upperIndex]
+}
 
-	return a[lowerIndex : upperIndex+1]
+func (s Stream) ToArray() (a Array) {
+	a = make(Array, len(s))
+
+	for i, item := range s {
+		itemArray := make(Array, streamArrayItemSize)
+
+		itemArray[0] = NewBulkString(item.id.ToString())
+
+		valuesArray := make(Array, 0, len(item.values))
+
+		for key, value := range item.values {
+			valuesArray = append(
+				valuesArray,
+				NewBulkString(key),
+				NewBulkString(value),
+			)
+		}
+
+		itemArray[1] = valuesArray
+
+		a[i] = itemArray
+	}
+
+	return
 }
 
 func (s Stream) isRhelType() {}

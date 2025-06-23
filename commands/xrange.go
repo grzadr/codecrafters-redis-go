@@ -14,10 +14,16 @@ func NewCmdXRange() CmdXRange {
 	return CmdXRange{BaseCommand: BaseCommand("XRANGE")}
 }
 
+const (
+	posXRangeKey   = 0
+	posXRangeLower = 1
+	posXRangeUpper = 2
+)
+
 func (c CmdXRange) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	key := args.At(0).String()
+	key := args.At(posXRangeKey).String()
 	got, found := GetDataMapInstance().Get(key)
 
 	if !found {
@@ -32,7 +38,10 @@ func (c CmdXRange) Exec(
 		return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
 	}
 
-	value = stream.Range(args.At(1).String(), args.At(2).String())
+	value = stream.Range(
+		args.At(posXRangeLower).String(),
+		args.At(posXRangeUpper).String(),
+	).ToArray()
 
 	return
 }
