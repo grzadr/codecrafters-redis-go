@@ -86,8 +86,6 @@ func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, end bool) {
 		cmd = buf[:n]
 	}
 
-	log.Printf("read cmd: %q\n", cmd)
-
 	return
 }
 

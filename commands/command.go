@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"iter"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -163,8 +162,7 @@ func NewParsedCommand(raw rheltypes.RhelType) (parsed *ParsedCommand) {
 func parseCommand(
 	command []byte,
 ) iter.Seq[*ParsedCommand] {
-	log.Printf("command:\n%s", hex.Dump(command))
-
+	// log.Printf("command:\n%s", hex.Dump(command))
 	return func(yield func(*ParsedCommand) bool) {
 		tokens := rheltypes.NewTokenIterator(command)
 
