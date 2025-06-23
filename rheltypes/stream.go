@@ -239,7 +239,7 @@ func helperItemIdCompare(item StreamItem, id StreamItemId) int {
 	return item.id.Cmp(id)
 }
 
-func (s Stream) Range(lower, upper string) Stream {
+func (s Stream) Range(lower, upper string, includeLower bool) Stream {
 	lowerId, lowerIdType := NewStreamItemId(lower)
 	upperId, upperIdType := NewStreamItemId(upper)
 
@@ -255,7 +255,7 @@ func (s Stream) Range(lower, upper string) Stream {
 			helperItemIdCompare,
 		)
 
-		if !found && lowerIndex < len(s)-1 {
+		if (!found && lowerIndex < len(s)-1) || (found && !includeLower) {
 			lowerIndex++
 		}
 	}

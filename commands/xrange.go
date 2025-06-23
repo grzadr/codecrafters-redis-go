@@ -41,6 +41,7 @@ func (c CmdXRange) Exec(
 	value = stream.Range(
 		args.At(posXRangeLower).String(),
 		args.At(posXRangeUpper).String(),
+		true,
 	).ToArray()
 
 	return

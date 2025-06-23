@@ -116,6 +116,7 @@ func (c CmdXRead) Exec(
 		streamArray[1] = stream.Range(
 			streamSpec.id,
 			"+",
+			false,
 		).ToArray()
 
 		valueArray[s] = streamArray
