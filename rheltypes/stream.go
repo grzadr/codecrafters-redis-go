@@ -1,27 +1,97 @@
 package rheltypes
 
-import "slices"
-
-type StreamItem struct {
-	id     string
-	values map[string]string
-}
+import (
+	"fmt"
+	"log"
+	"strconv"
+	"strings"
+	"time"
+)
 
 const (
 	streamItemSliceSize   = 2
 	defaultStreamCapacity = 256
 )
 
-func NewStreamItemFromArray(id string, items Array) (item StreamItem) {
-	item.id = id
-	item.values = make(map[string]string, len(items)/streamItemSliceSize)
+var (
+	wrongIdError = fmt.Errorf(
+		"The ID specified in XADD is equal or smaller than the target stream top item",
+	)
 
-	for pair := range slices.Chunk(items, streamItemSliceSize) {
-		item.values[pair[0].String()] = pair[1].String()
+	ZeroIdError = fmt.Errorf(
+		"The ID specified in XADD must be greater than 0-0",
+	)
+)
+
+type IdGeneration int
+
+const (
+	GenerateNext IdGeneration = iota
+	GenerateNextSeq
+	Explicit
+)
+
+type StreamItemId struct {
+	ts  int
+	seq int
+}
+
+func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
+	idType = Explicit
+	if query == "*" {
+		idType = GenerateNext
+		id.seq = 1
+
+		return
+	}
+
+	ts, seq, _ := strings.Cut(query, "-")
+	id.ts, _ = strconv.Atoi(ts)
+
+	if seq == "*" {
+		idType = GenerateNextSeq
+	} else {
+		id.seq, _ = strconv.Atoi(seq)
 	}
 
 	return
 }
+
+func (id StreamItemId) LessTs(other StreamItemId) bool {
+	return id.ts < other.ts
+}
+
+func (id StreamItemId) LessSeq(other StreamItemId) bool {
+	return id.ts == other.ts && id.seq < other.seq
+}
+
+func (id StreamItemId) Less(other StreamItemId) bool {
+	return id.LessTs(other) || id.LessSeq(other)
+}
+
+func (id StreamItemId) NextSeq() StreamItemId {
+	return StreamItemId{id.ts, id.seq + 1}
+}
+
+func (id StreamItemId) Next() StreamItemId {
+	return StreamItemId{int(time.Now().UnixMilli()), 0}
+}
+
+type StreamItem struct {
+	id     StreamItemId
+	values map[string]string
+}
+
+// func NewStreamItemFromArray(id string, items Array) (item StreamItem) {
+// 	item.id = NewStreamItemId(id)
+// 	item.values = make(map[string]string, len(items)/streamItemSliceSize)
+
+// 	for pair := range slices.Chunk(items, streamItemSliceSize) {
+// 		item.values[pair[0].String()] = pair[1].String()
+// 	}
+
+// 	return
+// }
 
 func (i StreamItem) Size() int {
 	return 0
@@ -39,6 +109,54 @@ type Stream []StreamItem
 
 func NewStream() Stream {
 	return make(Stream, 0, defaultStreamCapacity)
+}
+
+func (s Stream) LastId() (id StreamItemId) {
+	if len(s) == 0 {
+		return StreamItemId{}
+	}
+
+	return s.At(-1).id
+}
+
+func (s *Stream) GenerateId(query string) (id StreamItemId, err error) {
+	if query == "0-0" {
+		return id, ZeroIdError
+	}
+
+	var genType IdGeneration
+	id, genType = NewStreamItemId(query)
+	lastId := s.LastId()
+
+	log.Println(id, genType, lastId)
+
+	switch genType {
+	case Explicit:
+		if !lastId.Less(id) {
+			return id, wrongIdError
+		}
+	case GenerateNextSeq:
+		if !lastId.LessTs(id) {
+			return id, wrongIdError
+		}
+
+		id = lastId.NextSeq()
+	case GenerateNext:
+		id = lastId.Next()
+	}
+
+	return
+}
+
+func (s *Stream) Add(idStr string, values map[string]string) (err error) {
+	id, err := s.GenerateId(idStr)
+	if err != nil {
+		return err
+	}
+
+	*s = append(*s, StreamItem{id: id, values: values})
+
+	return
 }
 
 func (s Stream) Size() int {
