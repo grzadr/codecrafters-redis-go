@@ -48,4 +48,8 @@ func (i Integer) Integer() (int, error) {
 	return int(i), nil
 }
 
+func (i Integer) TypeName() string {
+	return "integer"
+}
+
 func (Integer) isRhelType() {}

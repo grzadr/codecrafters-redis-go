@@ -13,6 +13,7 @@ type RhelType interface {
 	Integer() (int, error)
 	Size() int
 	First() RhelType
+	TypeName() string
 }
 
 type rhelPrefix string

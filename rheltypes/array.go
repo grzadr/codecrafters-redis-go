@@ -96,4 +96,8 @@ func (a Array) Cmd() string {
 	return strings.ToUpper(a.First().String())
 }
 
+func (a Array) TypeName() string {
+	return "array"
+}
+
 func (a Array) isRhelType() {}

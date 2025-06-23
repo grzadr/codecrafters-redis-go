@@ -34,6 +34,10 @@ func (s SimpleString) Integer() (num int, err error) {
 	return strconv.Atoi(string(s))
 }
 
+func (s SimpleString) TypeName() string {
+	return "string"
+}
+
 func (s SimpleString) isRhelType() {}
 
 type BulkString struct {
@@ -158,4 +162,9 @@ func (s BulkString) Integer() (num int, err error) {
 func (s BulkString) IsTerminated() bool {
 	return s.terminated
 }
+
+func (s BulkString) TypeName() string {
+	return "string"
+}
+
 func (s BulkString) isRhelType() {}

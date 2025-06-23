@@ -95,15 +95,16 @@ func (c BaseCommand) ReplicaRespond() bool { return false }
 func (BaseCommand) isRhelCommand() {}
 
 var commandMap = map[string]func() RhelCommand{
-	"PING":     func() RhelCommand { return NewCmdPing() },
-	"ECHO":     func() RhelCommand { return NewCmdEcho() },
-	"SET":      func() RhelCommand { return NewCmdSet() },
-	"GET":      func() RhelCommand { return NewCmdGet() },
 	"CONFIG":   func() RhelCommand { return NewCmdConfig() },
-	"KEYS":     func() RhelCommand { return NewCmdKeys() },
+	"ECHO":     func() RhelCommand { return NewCmdEcho() },
+	"GET":      func() RhelCommand { return NewCmdGet() },
 	"INFO":     func() RhelCommand { return NewCmdInfo() },
-	"REPLCONF": func() RhelCommand { return NewCmdReplconf() },
+	"KEYS":     func() RhelCommand { return NewCmdKeys() },
+	"PING":     func() RhelCommand { return NewCmdPing() },
 	"PSYNC":    func() RhelCommand { return NewCmdPsync() },
+	"REPLCONF": func() RhelCommand { return NewCmdReplconf() },
+	"SET":      func() RhelCommand { return NewCmdSet() },
+	"TYPE":     func() RhelCommand { return NewCmdType() },
 	"WAIT":     func() RhelCommand { return NewCmdWait() },
 }
 
