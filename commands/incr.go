@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
@@ -23,15 +24,21 @@ func (c CmdIncr) Exec(
 
 	num, found := instance.Get(key)
 
+	numInt := 0
+
 	if !found {
-		value = rheltypes.Integer(1)
-	} else if numInt, err := num.Integer(); err != nil {
-		return rheltypes.NewGenericError(fmt.Errorf("value is not an integer or out of range")), nil
+		numInt = 1
+	} else if numInt, err = num.Integer(); err != nil {
+		return rheltypes.NewGenericError(
+			fmt.Errorf("value is not an integer or out of range"),
+		), nil
 	} else {
-		value = rheltypes.Integer(numInt + 1)
+		numInt++
 	}
 
-	instance.Set(key, value)
+	value = rheltypes.Integer(numInt)
+
+	instance.Set(key, rheltypes.NewBulkString(strconv.Itoa(numInt)))
 
 	return value, err
 }
