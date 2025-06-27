@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -61,11 +62,19 @@ func sendResponse(
 	conn *net.TCPConn,
 	result *commands.CommandResult,
 ) (err error) {
+	log.Println(hex.Dump(result.Serialize()))
+
 	if err = result.Err; err != nil {
+		log.Fatalln("cmd exec")
+
 		err = fmt.Errorf("error during cmd execution: %w", err)
 	} else if _, err = conn.Write(result.Serialize()); err != nil {
+		log.Fatalln("send exec")
+
 		err = fmt.Errorf("error sending data: %w", err)
 	}
+
+	log.Println("send complete")
 
 	return
 }
@@ -94,9 +103,13 @@ func masterExecuteCommand(
 	cmd []byte,
 ) (keepConn bool, err error) {
 	for result := range commands.ExecuteCommand(cmd) {
+		log.Println("sending response")
+
 		if err = sendResponse(conn, result); err != nil {
-			return
+			return keepConn, err
 		}
+
+		log.Println("response sent")
 
 		pool := connection.GetConnectionPool()
 
@@ -108,7 +121,7 @@ func masterExecuteCommand(
 
 		if result.Resend {
 			if err = pool.Resend(cmd, false); err != nil {
-				return
+				return keepConn, err
 			}
 		}
 
@@ -117,7 +130,7 @@ func masterExecuteCommand(
 		}
 	}
 
-	return
+	return keepConn, err
 }
 
 func handleConn(conn *net.TCPConn, errCh chan error) {

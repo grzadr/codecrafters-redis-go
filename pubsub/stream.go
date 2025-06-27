@@ -176,7 +176,7 @@ func (m *StreamManager) Subscribe(streamName string) *Subscription {
 
 	st, exists := m.streams[streamName]
 	if !exists {
-		st = newStream(st.quit)
+		st = newStream(m.quit)
 		m.streams[streamName] = st
 
 		go st.run()

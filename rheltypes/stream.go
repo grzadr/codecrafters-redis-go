@@ -76,6 +76,10 @@ func NewStreamItemId(query string) (id StreamItemId, idType IdGeneration) {
 	return id, idType
 }
 
+func (id StreamItemId) IsZero() bool {
+	return id.ts+id.seq == 0
+}
+
 func (id StreamItemId) LessTs(other StreamItemId) bool {
 	return id.ts < other.ts
 }
@@ -133,15 +137,35 @@ type StreamItem struct {
 // }
 
 func (i StreamItem) Size() int {
-	return 0
+	return len(i.values)
 }
 
-func (i StreamItem) Serialize() []byte {
-	return nil
-}
+// func (i StreamItem) Serialize() []byte {
+// 	return nil
+// }
 
-func (i StreamItem) String() string {
-	return ""
+// func (i StreamItem) String() string {
+// 	return ""
+// }
+
+func (i StreamItem) ToArray() (a Array) {
+	a = make(Array, streamArrayItemSize)
+
+	a[0] = NewBulkString(i.id.ToString())
+
+	valuesArray := make(Array, 0, len(i.values))
+
+	for key, value := range i.values {
+		valuesArray = append(
+			valuesArray,
+			NewBulkString(key),
+			NewBulkString(value),
+		)
+	}
+
+	a[1] = valuesArray
+
+	return
 }
 
 type Stream []StreamItem
@@ -280,23 +304,7 @@ func (s Stream) ToArray() (a Array) {
 	a = make(Array, len(s))
 
 	for i, item := range s {
-		itemArray := make(Array, streamArrayItemSize)
-
-		itemArray[0] = NewBulkString(item.id.ToString())
-
-		valuesArray := make(Array, 0, len(item.values))
-
-		for key, value := range item.values {
-			valuesArray = append(
-				valuesArray,
-				NewBulkString(key),
-				NewBulkString(value),
-			)
-		}
-
-		itemArray[1] = valuesArray
-
-		a[i] = itemArray
+		a[i] = item.ToArray()
 	}
 
 	return

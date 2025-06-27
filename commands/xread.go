@@ -2,9 +2,13 @@ package commands
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
+	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -89,11 +93,11 @@ func NewCmdXReadArgs(args rheltypes.Array) (parsed CmdXReadArgs) {
 }
 
 func (c CmdXRead) ReadAll(
-	args CmdXReadArgs,
+	streams []CmdXReadStream,
 ) (values rheltypes.Array, err error) {
-	values = make(rheltypes.Array, len(parsedArgs.streams))
+	values = make(rheltypes.Array, len(streams))
 
-	for s, streamSpec := range parsedArgs.streams {
+	for s, streamSpec := range streams {
 		streamArray := make(rheltypes.Array, numXReadValueSections)
 
 		streamArray[0] = rheltypes.NewBulkString(streamSpec.key)
@@ -101,16 +105,17 @@ func (c CmdXRead) ReadAll(
 		got, found := GetDataMapInstance().Get(streamSpec.key)
 
 		if !found {
-			return nil, c.ErrWrap(
-				fmt.Errorf("stream %q not found", streamSpec.key),
-			)
+			return nil, fmt.Errorf("stream %q not found", streamSpec.key)
 		}
 
 		stream, ok := got.(rheltypes.Stream)
 
 		if !ok {
-			return nil, c.ErrWrap(
-				fmt.Errorf("expected stream, got %T", value),
+			return nil, fmt.Errorf(
+				"expected stream from %q, got %T %v",
+				streamSpec.key,
+				got,
+				got,
 			)
 		}
 
@@ -126,52 +131,112 @@ func (c CmdXRead) ReadAll(
 	return values, err
 }
 
+func createContextFromTimeout(
+	timeoutMS int,
+) (context.Context, context.CancelFunc) {
+	switch {
+	case timeoutMS == 0:
+		// Infinite timeout with cancellation capability
+		return context.WithCancel(context.Background())
+	case timeoutMS > 0:
+		// Explicit timeout duration
+		duration := time.Duration(timeoutMS) * time.Millisecond
+
+		return context.WithTimeout(context.Background(), duration)
+	default:
+		// Invalid negative values default to no timeout
+		return context.Background(), func() {}
+	}
+}
+
+func (c CmdXRead) ReadLast(
+	key string, timeout int,
+) (value rheltypes.StreamItem, err error) {
+	sub := pubsub.GetStreamManager().Subscribe(key)
+	defer sub.Close()
+
+	ticker := time.NewTicker(defaultWaitTicker)
+	defer ticker.Stop()
+
+	ctx, cancel := createContextFromTimeout(timeout)
+	defer cancel()
+
+	for {
+		select {
+		case msg := <-sub.Messages:
+			stream, ok := msg.(*rheltypes.StreamItem)
+
+			if !ok {
+				return value, fmt.Errorf(
+					"expected stream, got %T %v",
+					msg,
+					msg,
+				)
+			}
+
+			return *stream, nil
+
+		case <-ctx.Done():
+			return value, nil
+		case <-ticker.C:
+		}
+	}
+}
+
 func (c CmdXRead) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
 	parsedArgs := NewCmdXReadArgs(args)
 
-	valueArray := make(rheltypes.Array, len(parsedArgs.streams))
+	valueArray := make(rheltypes.Array, 0, len(parsedArgs.streams))
 
 	if parsedArgs.block == -1 || !parsedArgs.newOnly {
-		for s, streamSpec := range parsedArgs.streams {
-			streamArray := make(rheltypes.Array, numXReadValueSections)
-
-			streamArray[0] = rheltypes.NewBulkString(streamSpec.key)
-
-			got, found := GetDataMapInstance().Get(streamSpec.key)
-
-			if !found {
-				return nil, c.ErrWrap(
-					fmt.Errorf("stream %q not found", streamSpec.key),
-				)
-			}
-
-			stream, ok := got.(rheltypes.Stream)
-
-			if !ok {
-				return nil, c.ErrWrap(
-					fmt.Errorf("expected stream, got %T", value),
-				)
-			}
-
-			streamArray[1] = stream.Range(
-				streamSpec.id,
-				"+",
-				false,
-			).ToArray()
-
-			valueArray[s] = streamArray
-		}
-
-		if len(valueArray) == 0 {
-			return rheltypes.NewNullBulkString(), nil
+		if valueArray, err = c.ReadAll(parsedArgs.streams); err != nil {
+			return nil, c.ErrWrap(fmt.Errorf("failed to read all: %w", err))
 		}
 	}
 
-	context.WithTimeout()
+	if parsedArgs.block > -1 {
+		key := parsedArgs.streams[0].key
+
+		last, err := c.ReadLast(key, parsedArgs.block)
+		if err != nil {
+			return nil, c.ErrWrap(fmt.Errorf("failed to read last: %w", err))
+		} else if last.Size() == 0 {
+			return rheltypes.NewNullBulkString(), nil
+		}
+
+		lastArray := last.ToArray()
+
+		if len(valueArray) > 0 {
+			log.Println(hex.Dump(valueArray.Serialize()))
+
+			streamArray := valueArray.At(0).(rheltypes.Array)
+			stream := streamArray.At(1).(rheltypes.Array)
+			stream.Append(lastArray)
+			streamArray.Set(1, stream)
+			valueArray.Set(0, streamArray)
+
+			log.Println(hex.Dump(valueArray.Serialize()))
+		} else {
+			log.Println("new array")
+
+			valueArray = rheltypes.Array{
+				rheltypes.Array{
+					rheltypes.NewBulkString(key),
+					lastArray,
+				},
+			}
+		}
+	}
+
+	if len(valueArray) == 0 {
+		return rheltypes.NewNullBulkString(), nil
+	}
 
 	value = valueArray
+
+	log.Println("normal return")
 
 	return value, err
 }

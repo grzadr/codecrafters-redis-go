@@ -65,9 +65,11 @@ func (c CmdXAdd) Exec(
 		return rheltypes.NewGenericError(err), nil
 	}
 
-	sm := pubsub.GetStreamManager()
+	if len(stream) > 0 {
+		sm := pubsub.GetStreamManager()
 
-	go sm.Publish(parsedArgs.Key, stream.At(-1))
+		go sm.Publish(parsedArgs.Key, stream.At(-1))
+	}
 
 	instance.Set(parsedArgs.Key, stream)
 

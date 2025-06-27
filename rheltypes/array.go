@@ -90,6 +90,14 @@ func (a Array) At(index int) RhelType {
 	}
 }
 
+func (a *Array) Append(value RhelType) {
+	*a = append(*a, value)
+}
+
+func (a *Array) Set(index int, value RhelType) {
+	(*a)[index] = value
+}
+
 func (a Array) Integer() (int, error) { return 0, nil }
 
 func (a Array) Cmd() string {
