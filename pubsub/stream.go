@@ -38,8 +38,8 @@ func newSubscription(id int, unsub chan int) *Subscription {
 func (sub *Subscription) Close() {
 	sub.once.Do(func() {
 		close(sub.Messages)
-		close(sub.Done)
 		sub.unsub <- sub.id
+		close(sub.Done)
 	})
 }
 
@@ -98,6 +98,7 @@ func (s *stream) publishMsg(msg Message) {
 	for _, sub := range s.subscribers {
 		select {
 		case sub.Messages <- msg:
+		case <-sub.Done:
 		default:
 			sub.Close()
 		}
@@ -108,11 +109,18 @@ func (s *stream) clean() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	var closed sync.WaitGroup
+
 	for _, sub := range s.subscribers {
+		closed.Add(1)
+
 		go func(s *Subscription) {
+			defer closed.Done()
 			s.Close() // Wait for stream completion
 		}(sub)
 	}
+
+	closed.Wait()
 }
 
 func (s *stream) close() {

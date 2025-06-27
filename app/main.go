@@ -11,6 +11,7 @@ import (
 
 	"github.com/codecrafters-io/redis-starter-go/commands"
 	"github.com/codecrafters-io/redis-starter-go/connection"
+	"github.com/codecrafters-io/redis-starter-go/pubsub"
 )
 
 const (
@@ -49,6 +50,7 @@ func dialTcp(address, port string) *net.TCPConn {
 func clean() {
 	commands.CloseMaps()
 	connection.GetConnectionPool().CloseAlls()
+	pubsub.GetStreamManager().Close()
 }
 
 func handleErrors(errCh chan error) {
