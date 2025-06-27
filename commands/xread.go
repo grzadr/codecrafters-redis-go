@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -94,37 +95,43 @@ func (c CmdXRead) Exec(
 
 	valueArray := make(rheltypes.Array, len(parsedArgs.streams))
 
-	for s, streamSpec := range parsedArgs.streams {
-		streamArray := make(rheltypes.Array, numXReadValueSections)
+	if parsedArgs.block == -1 || !parsedArgs.newOnly {
+		for s, streamSpec := range parsedArgs.streams {
+			streamArray := make(rheltypes.Array, numXReadValueSections)
 
-		streamArray[0] = rheltypes.NewBulkString(streamSpec.key)
+			streamArray[0] = rheltypes.NewBulkString(streamSpec.key)
 
-		got, found := GetDataMapInstance().Get(streamSpec.key)
+			got, found := GetDataMapInstance().Get(streamSpec.key)
 
-		if !found {
-			return nil, c.ErrWrap(
-				fmt.Errorf("stream %q not found", streamSpec.key),
-			)
+			if !found {
+				return nil, c.ErrWrap(
+					fmt.Errorf("stream %q not found", streamSpec.key),
+				)
+			}
+
+			stream, ok := got.(rheltypes.Stream)
+
+			if !ok {
+				return nil, c.ErrWrap(
+					fmt.Errorf("expected stream, got %T", value),
+				)
+			}
+
+			streamArray[1] = stream.Range(
+				streamSpec.id,
+				"+",
+				false,
+			).ToArray()
+
+			valueArray[s] = streamArray
 		}
 
-		stream, ok := got.(rheltypes.Stream)
-
-		if !ok {
-			return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
+		if len(valueArray) == 0 {
+			return rheltypes.NewNullBulkString(), nil
 		}
-
-		streamArray[1] = stream.Range(
-			streamSpec.id,
-			"+",
-			false,
-		).ToArray()
-
-		valueArray[s] = streamArray
 	}
 
-	if len(valueArray) == 0 {
-		return rheltypes.NewNullBulkString(), nil
-	}
+	context.WithTimeout()
 
 	value = valueArray
 

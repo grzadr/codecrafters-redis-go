@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/codecrafters-io/redis-starter-go/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -63,6 +64,10 @@ func (c CmdXAdd) Exec(
 	if addedId, err = stream.Add(parsedArgs.Id, parsedArgs.Items); err != nil {
 		return rheltypes.NewGenericError(err), nil
 	}
+
+	sm := pubsub.GetStreamManager()
+
+	go sm.Publish(parsedArgs.Key, stream.At(-1))
 
 	instance.Set(parsedArgs.Key, stream)
 
