@@ -25,7 +25,7 @@ func (c CmdIncr) Exec(
 
 	if !found {
 		value = rheltypes.Integer(1)
-	} else if numInt, ok := num.(rheltypes.Integer); !ok {
+	} else if numInt, err := num.Integer(); err != nil {
 		return rheltypes.NewGenericError(fmt.Errorf("value is not an integer or out of range")), nil
 	} else {
 		value = rheltypes.Integer(numInt + 1)
