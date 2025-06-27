@@ -268,9 +268,13 @@ func (m *StreamManager) run() {
 			}
 		}
 
+		m.mu.Lock()
+
 		for _, id := range deletionList {
 			delete(m.streams, id)
 		}
+
+		m.mu.Unlock()
 	}
 }
 

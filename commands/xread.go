@@ -35,28 +35,29 @@ type CmdXReadStream struct {
 }
 
 type CmdXReadArgs struct {
-	block   int
-	newOnly bool
+	block int
+	// newOnly bool
 	streams []CmdXReadStream
 }
 
 func NewCmdXReadArgs(args rheltypes.Array) (parsed CmdXReadArgs) {
-	parsed.newOnly = args.At(-1).String() == "$"
-	lastIndex := len(args)
-
+	// parsed.newOnly = args.At(-1).String() == "$"
+	// lastIndex := len(args)
 	parsed.block = -1
 
-	if parsed.newOnly {
-		lastIndex--
-	}
+	// if parsed.newOnly {
+	// 	lastIndex--
+	// }
 
-	args = args[:lastIndex]
+	// args = args[:lastIndex]
+
+	log.Println(args)
 
 	streamsIndex := -1
 
 	var readInteger *int
 
-	for i, a := range args[:lastIndex] {
+	for i, a := range args {
 		switch strings.ToUpper(a.String()) {
 		case "BLOCK":
 			readInteger = &parsed.block
@@ -78,6 +79,8 @@ func NewCmdXReadArgs(args rheltypes.Array) (parsed CmdXReadArgs) {
 
 	args = args[streamsIndex:]
 
+	log.Println(args)
+
 	half := len(args) / numXReadStreamSections
 
 	parsed.streams = make([]CmdXReadStream, half)
@@ -98,6 +101,10 @@ func (c CmdXRead) ReadAll(
 	values = make(rheltypes.Array, len(streams))
 
 	for s, streamSpec := range streams {
+		if streamSpec.id == "$" {
+			continue
+		}
+
 		streamArray := make(rheltypes.Array, numXReadValueSections)
 
 		streamArray[0] = rheltypes.NewBulkString(streamSpec.key)
@@ -190,13 +197,14 @@ func (c CmdXRead) Exec(
 
 	valueArray := make(rheltypes.Array, 0, len(parsedArgs.streams))
 
-	if parsedArgs.block == -1 || !parsedArgs.newOnly {
+	if parsedArgs.block == -1 {
 		if valueArray, err = c.ReadAll(parsedArgs.streams); err != nil {
 			return nil, c.ErrWrap(fmt.Errorf("failed to read all: %w", err))
 		}
 	}
 
 	if parsedArgs.block > -1 {
+		log.Println(parsedArgs.streams)
 		key := parsedArgs.streams[0].key
 
 		last, err := c.ReadLast(key, parsedArgs.block)
@@ -224,7 +232,7 @@ func (c CmdXRead) Exec(
 			valueArray = rheltypes.Array{
 				rheltypes.Array{
 					rheltypes.NewBulkString(key),
-					lastArray,
+					rheltypes.Array{lastArray},
 				},
 			}
 		}
