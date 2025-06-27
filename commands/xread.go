@@ -185,7 +185,7 @@ func (c CmdXRead) ReadLast(
 
 		case <-ctx.Done():
 			return value, nil
-		case <-ticker.C:
+			// case <-ticker.C:
 		}
 	}
 }
