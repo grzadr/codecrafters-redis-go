@@ -10,8 +10,11 @@ import (
 	"strings"
 
 	"github.com/codecrafters-io/redis-starter-go/internal"
+	"github.com/codecrafters-io/redis-starter-go/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
+
+const defaultMkdirMode = 0o755
 
 type stringFlag struct {
 	set   bool
@@ -210,8 +213,6 @@ func (conf *ConfigArgs) InitDb() (err error) {
 	return
 }
 
-const defaultMkdirMode = 0o755
-
 func Setup() (conf *ConfigArgs, err error) {
 	conf = NewConfigArgs()
 
@@ -220,6 +221,8 @@ func Setup() (conf *ConfigArgs, err error) {
 	if err = conf.InitDb(); err != nil {
 		err = fmt.Errorf("error during db init: %w", err)
 	}
+
+	pubsub.GetStreamManager()
 
 	return
 }

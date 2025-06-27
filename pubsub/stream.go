@@ -72,17 +72,12 @@ func newStream(quit chan struct{}) *stream {
 	}
 }
 
-func (s *stream) safeDelete(id int, sub *Subscription) {
-	sub.Close()
-	delete(s.subscribers, id)
-}
-
 func (s *stream) delete(id int) {
-	if sub, found := s.subscribers[id]; found {
-		s.lock.Lock()
-		defer s.lock.Unlock()
-		s.safeDelete(id, sub)
-	}
+	// if sub, found := s.subscribers[id]; found {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	delete(s.subscribers, id)
+	// }
 }
 
 func (s *stream) subscribe() *Subscription {
