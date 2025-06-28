@@ -135,21 +135,28 @@ func NewParsedCommandErr(err error) (parsed *ParsedCommand) {
 	return
 }
 
+func NewParsedCommandFromArray(args rheltypes.Array) (parsed *ParsedCommand) {
+	parsed = &ParsedCommand{
+		cmd:  NewRhelCommand(args[0].String()),
+		args: args[1:],
+		size: args.Size(),
+	}
+
+	switch parsed.cmd.(type) {
+	case CmdReplconf:
+		if parsed.args.Cmd() == "ACK" {
+			parsed.ack, parsed.err = parsed.args.At(1).Integer()
+		}
+		// case CmdMulti:
+	}
+
+	return
+}
+
 func NewParsedCommand(raw rheltypes.RhelType) (parsed *ParsedCommand) {
 	switch value := raw.(type) {
 	case rheltypes.Array:
-		parsed = &ParsedCommand{
-			cmd:  NewRhelCommand(value[0].String()),
-			args: value[1:],
-			size: value.Size(),
-		}
-
-		switch parsed.cmd.(type) {
-		case CmdReplconf:
-			if parsed.args.Cmd() == "ACK" {
-				parsed.ack, parsed.err = parsed.args.At(1).Integer()
-			}
-		}
+		parsed = NewParsedCommandFromArray(value)
 
 	case rheltypes.SimpleString, rheltypes.BulkString:
 
