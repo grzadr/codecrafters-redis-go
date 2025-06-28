@@ -131,13 +131,13 @@ type ParsedCommand struct {
 	exec  bool
 }
 
-func NewParsedCommandErr(err error) (parsed *ParsedCommand) {
+func newParsedCommandErr(err error) (parsed *ParsedCommand) {
 	parsed = &ParsedCommand{err: fmt.Errorf("failed to parse command: %w", err)}
 
 	return
 }
 
-func NewParsedCommandFromArray(args rheltypes.Array) (parsed *ParsedCommand) {
+func newParsedCommandFromArray(args rheltypes.Array) (parsed *ParsedCommand) {
 	parsed = &ParsedCommand{
 		cmd:  NewRhelCommand(args[0].String()),
 		args: args[1:],
@@ -159,15 +159,15 @@ func NewParsedCommandFromArray(args rheltypes.Array) (parsed *ParsedCommand) {
 	return
 }
 
-func NewParsedCommand(raw rheltypes.RhelType) (parsed *ParsedCommand) {
+func newParsedCommand(raw rheltypes.RhelType) (parsed *ParsedCommand) {
 	switch value := raw.(type) {
 	case rheltypes.Array:
-		parsed = NewParsedCommandFromArray(value)
+		parsed = newParsedCommandFromArray(value)
 
 	case rheltypes.SimpleString, rheltypes.BulkString:
 
 	default:
-		parsed = NewParsedCommandErr(
+		parsed = newParsedCommandErr(
 			fmt.Errorf("expected array, got %T", value),
 		)
 	}
@@ -175,33 +175,28 @@ func NewParsedCommand(raw rheltypes.RhelType) (parsed *ParsedCommand) {
 	return
 }
 
-func parseCommand(
+func newParsedCommandFromBytes(
 	command []byte,
 ) iter.Seq[*ParsedCommand] {
 	// log.Printf("command:\n%s", hex.Dump(command))
 	return func(yield func(*ParsedCommand) bool) {
 		tokens := rheltypes.NewTokenIterator(command)
 
-		// offset := tokens.Offset()
-
 		for {
 			rawValue, err := rheltypes.RhelEncode(tokens)
 			if err != nil {
 				yield(
-					NewParsedCommandErr(fmt.Errorf("encoding error: %w", err)),
+					newParsedCommandErr(fmt.Errorf("encoding error: %w", err)),
 				)
 
 				return
 			}
 
-			// size := tokens.Offset() - offset
-			// = tokens.Offset()
-
 			if tokens.IsDone() {
 				return
 			}
 
-			parsed := NewParsedCommand(rawValue)
+			parsed := newParsedCommand(rawValue)
 
 			if parsed == nil {
 				continue
@@ -213,6 +208,8 @@ func parseCommand(
 		}
 	}
 }
+
+func (p *ParsedCommand) Exec()
 
 const defaultTransactionCapacity = 16
 
@@ -237,6 +234,35 @@ type CommandResult struct {
 	Ack            int
 }
 
+func newCommandResult(p *ParsedCommand) (result *CommandResult) {
+	result = &CommandResult{}
+	if err := p.err; err != nil {
+		result.Err = NewCommandError(command, err)
+		yield(result)
+
+		return
+	}
+
+	cmd := parsed.cmd
+
+	result.result, result.Err = cmd.Exec(parsed.args)
+	if err := result.Err; err != nil {
+		result.Err = NewCommandError(command, err)
+		yield(result)
+
+		return
+	}
+
+	result.Resend = cmd.Resend()
+	result.ReplicaRespond = cmd.ReplicaRespond()
+	result.Size = parsed.size
+	result.Ack = parsed.ack
+
+	if !yield(result) {
+		return
+	}
+}
+
 func (r CommandResult) Serialize() []byte {
 	if r.result == nil {
 		return nil
@@ -250,7 +276,7 @@ func ExecuteCommand(
 	tran *Transaction,
 ) iter.Seq[*CommandResult] {
 	return func(yield func(*CommandResult) bool) {
-		for parsed := range parseCommand(command) {
+		for parsed := range newParsedCommandFromBytes(command) {
 			result := &CommandResult{}
 			if err := parsed.err; err != nil {
 				result.Err = NewCommandError(command, err)

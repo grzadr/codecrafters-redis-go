@@ -103,8 +103,9 @@ func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, end bool) {
 func masterExecuteCommand(
 	conn *net.TCPConn,
 	cmd []byte,
+	transaction *commands.Transaction,
 ) (keepConn bool, err error) {
-	for result := range commands.ExecuteCommand(cmd) {
+	for result := range commands.ExecuteCommand(cmd, transaction) {
 		log.Println("sending response")
 
 		if err = sendResponse(conn, result); err != nil {

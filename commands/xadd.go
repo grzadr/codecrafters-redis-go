@@ -65,13 +65,13 @@ func (c CmdXAdd) Exec(
 		return rheltypes.NewGenericError(err), nil
 	}
 
+	instance.Set(parsedArgs.Key, stream)
+
 	if len(stream) > 0 {
 		sm := pubsub.GetStreamManager()
 
 		go sm.Publish(parsedArgs.Key, stream.At(-1))
 	}
-
-	instance.Set(parsedArgs.Key, stream)
 
 	return rheltypes.NewBulkString(addedId), nil
 }
