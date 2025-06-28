@@ -95,10 +95,14 @@ func (BaseCommand) isRhelCommand() {}
 
 var commandMap = map[string]func() RhelCommand{
 	"CONFIG":   func() RhelCommand { return NewCmdConfig() },
+	"DISCARD":  func() RhelCommand { return NewCmdDiscard() },
 	"ECHO":     func() RhelCommand { return NewCmdEcho() },
+	"EXEC":     func() RhelCommand { return NewCmdExec() },
 	"GET":      func() RhelCommand { return NewCmdGet() },
+	"INCR":     func() RhelCommand { return NewCmdIncr() },
 	"INFO":     func() RhelCommand { return NewCmdInfo() },
 	"KEYS":     func() RhelCommand { return NewCmdKeys() },
+	"MULTI":    func() RhelCommand { return NewCmdMulti() },
 	"PING":     func() RhelCommand { return NewCmdPing() },
 	"PSYNC":    func() RhelCommand { return NewCmdPsync() },
 	"REPLCONF": func() RhelCommand { return NewCmdReplconf() },
@@ -108,9 +112,6 @@ var commandMap = map[string]func() RhelCommand{
 	"XADD":     func() RhelCommand { return NewCmdXAdd() },
 	"XRANGE":   func() RhelCommand { return NewCmdXRange() },
 	"XREAD":    func() RhelCommand { return NewCmdXRead() },
-	"INCR":     func() RhelCommand { return NewCmdIncr() },
-	"MULTI":    func() RhelCommand { return NewCmdMulti() },
-	"EXEC":     func() RhelCommand { return NewCmdExec() },
 }
 
 func NewRhelCommand(name string) RhelCommand {
@@ -211,19 +212,6 @@ func newParsedCommandFromBytes(
 
 func (p *ParsedCommand) Exec()
 
-const defaultTransactionCapacity = 16
-
-type Transaction struct {
-	cmds   []*ParsedCommand
-	opened bool
-}
-
-func NewTransaction() *Transaction {
-	return &Transaction{
-		cmds: make([]*ParsedCommand, 0, defaultTransactionCapacity),
-	}
-}
-
 type CommandResult struct {
 	result         rheltypes.RhelType
 	KeepConnection bool
@@ -234,33 +222,39 @@ type CommandResult struct {
 	Ack            int
 }
 
+func newCommandResultQueued() (result *CommandResult) {
+	result.result = rheltypes.SimpleString("QUEUED")
+
+	return
+}
+
 func newCommandResult(p *ParsedCommand) (result *CommandResult) {
 	result = &CommandResult{}
 	if err := p.err; err != nil {
-		result.Err = NewCommandError(command, err)
-		yield(result)
+		result.Err = err
 
 		return
 	}
 
-	cmd := parsed.cmd
+	cmd := p.cmd
 
-	result.result, result.Err = cmd.Exec(parsed.args)
+	result.result, result.Err = cmd.Exec(p.args)
 	if err := result.Err; err != nil {
-		result.Err = NewCommandError(command, err)
-		yield(result)
+		result.Err = fmt.Errorf(
+			"failed to run command %s: %w",
+			cmd.Name(),
+			err,
+		)
 
 		return
 	}
 
 	result.Resend = cmd.Resend()
 	result.ReplicaRespond = cmd.ReplicaRespond()
-	result.Size = parsed.size
-	result.Ack = parsed.ack
+	result.Size = p.size
+	result.Ack = p.ack
 
-	if !yield(result) {
-		return
-	}
+	return
 }
 
 func (r CommandResult) Serialize() []byte {
@@ -271,40 +265,66 @@ func (r CommandResult) Serialize() []byte {
 	return r.result.Serialize()
 }
 
+const defaultTransactionCapacity = 16
+
+type Transaction struct {
+	cmds []*ParsedCommand
+}
+
+func NewTransaction() *Transaction {
+	return &Transaction{
+		cmds: make([]*ParsedCommand, 0, defaultTransactionCapacity),
+	}
+}
+
+func (t Transaction) Exec() (results []CommandResult, responses rheltypes.Array, err error) {
+	return
+}
+
 func ExecuteCommand(
 	command []byte,
 	tran *Transaction,
 ) iter.Seq[*CommandResult] {
 	return func(yield func(*CommandResult) bool) {
 		for parsed := range newParsedCommandFromBytes(command) {
-			result := &CommandResult{}
+			// TODO send parsing error
+			switch c := parsed.cmd.(type) {
+			case CmdMulti:
+				tran = NewTransaction()
+			case CmdExec:
+				if tran != nil {
+					results, parsed.args, err := tran.Exec()
+					// TODO iterate results
+				} else {
+					parsed.args = nil
+				}
+
+				tran = nil
+			case CmdDiscard:
+				if tran == nil {
+					parsed.args = nil
+				}
+
+				tran = nil
+			}
+
+			var result *CommandResult
+
+			if tran != nil {
+				tran.cmds = append(tran.cmds, parsed)
+				result = newCommandResultQueued()
+			} else if result := newCommandResult(parsed); parsed.err != nil {
+			}
+
 			if err := parsed.err; err != nil {
 				result.Err = NewCommandError(command, err)
-				yield(result)
+			}
 
+			if !yield(result) || result.Err != nil {
 				return
 			}
 
-			cmd := parsed.cmd
-
-			result.result, result.Err = cmd.Exec(parsed.args)
-			if err := result.Err; err != nil {
-				result.Err = NewCommandError(command, err)
-				yield(result)
-
-				return
-			}
-
-			result.Resend = cmd.Resend()
-			result.ReplicaRespond = cmd.ReplicaRespond()
-			result.Size = parsed.size
-			result.Ack = parsed.ack
-
-			if !yield(result) {
-				return
-			}
-
-			switch p := cmd.(type) {
+			switch p := parsed.cmd.(type) {
 			case CmdPsync:
 				if !yield(
 					&CommandResult{result: p.RenderFile(), KeepConnection: true},
