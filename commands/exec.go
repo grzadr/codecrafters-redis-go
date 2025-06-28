@@ -15,5 +15,9 @@ func NewCmdExec() CmdExec {
 }
 
 func (c CmdExec) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
-	return rheltypes.NewGenericError(fmt.Errorf("EXEC without MULTI")), nil
+	if args == nil {
+		return rheltypes.NewGenericError(fmt.Errorf("EXEC without MULTI")), nil
+	} else {
+		return args, nil
+	}
 }

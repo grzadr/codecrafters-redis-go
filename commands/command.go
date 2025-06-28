@@ -122,11 +122,13 @@ func NewRhelCommand(name string) RhelCommand {
 }
 
 type ParsedCommand struct {
-	cmd  RhelCommand
-	args rheltypes.Array
-	err  error
-	size int
-	ack  int
+	cmd   RhelCommand
+	args  rheltypes.Array
+	err   error
+	size  int
+	ack   int
+	multi bool
+	exec  bool
 }
 
 func NewParsedCommandErr(err error) (parsed *ParsedCommand) {
@@ -147,7 +149,11 @@ func NewParsedCommandFromArray(args rheltypes.Array) (parsed *ParsedCommand) {
 		if parsed.args.Cmd() == "ACK" {
 			parsed.ack, parsed.err = parsed.args.At(1).Integer()
 		}
-		// case CmdMulti:
+	case CmdMulti:
+		parsed.multi = true
+
+	case CmdExec:
+		parsed.exec = true
 	}
 
 	return
@@ -208,6 +214,19 @@ func parseCommand(
 	}
 }
 
+const defaultTransactionCapacity = 16
+
+type Transaction struct {
+	cmds   []*ParsedCommand
+	opened bool
+}
+
+func NewTransaction() *Transaction {
+	return &Transaction{
+		cmds: make([]*ParsedCommand, 0, defaultTransactionCapacity),
+	}
+}
+
 type CommandResult struct {
 	result         rheltypes.RhelType
 	KeepConnection bool
@@ -226,7 +245,10 @@ func (r CommandResult) Serialize() []byte {
 	return r.result.Serialize()
 }
 
-func ExecuteCommand(command []byte) iter.Seq[*CommandResult] {
+func ExecuteCommand(
+	command []byte,
+	tran *Transaction,
+) iter.Seq[*CommandResult] {
 	return func(yield func(*CommandResult) bool) {
 		for parsed := range parseCommand(command) {
 			result := &CommandResult{}
