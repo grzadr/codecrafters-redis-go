@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"iter"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -209,13 +210,15 @@ func newParsedCommandFromBytes(
 func (p *ParsedCommand) Commit(t *Transaction) (err error) {
 	switch p.cmd.(type) {
 	case CmdMulti:
-		*t = *NewTransaction()
+		t = NewTransaction()
 
 		return
 	case CmdDiscard:
 
 	case CmdExec:
 		if t != nil {
+			log.Println("executed")
+
 			_, p.args, err = t.Exec()
 		}
 	}
@@ -332,7 +335,7 @@ func ExecuteCommand(
 			if tran != nil {
 				tran.cmds = append(tran.cmds, parsed)
 				result = newCommandResultQueued()
-			} else if result := parsed.Exec(); result.Err != nil {
+			} else if result = parsed.Exec(); result.Err != nil {
 				result = NewCommandErrorResponse(command, result.Err)
 			}
 
