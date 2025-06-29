@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"iter"
-	"log"
 	"strings"
 	"sync"
 	"time"
@@ -176,7 +175,6 @@ func newParsedCommand(raw rheltypes.RhelType) (parsed *ParsedCommand) {
 func newParsedCommandFromBytes(
 	command []byte,
 ) iter.Seq[*ParsedCommand] {
-	// log.Printf("command:\n%s", hex.Dump(command))
 	return func(yield func(*ParsedCommand) bool) {
 		tokens := rheltypes.NewTokenIterator(command)
 
@@ -208,29 +206,19 @@ func newParsedCommandFromBytes(
 }
 
 func (p *ParsedCommand) Commit(t **Transaction) (err error) {
-	log.Println("commit")
-
 	switch p.cmd.(type) {
 	case CmdMulti:
-		log.Println("multi")
-
 		*t = NewTransaction()
 
 		return err
 	case CmdDiscard:
-		log.Println("discard")
-
 		if *t == nil {
 			p.args = nil
 		}
 
 		*t = nil
 	case CmdExec:
-		log.Println("exec")
-
 		if *t != nil {
-			log.Println("executed")
-
 			_, p.args, err = (*t).Exec()
 		} else {
 			p.args = nil

@@ -2,9 +2,7 @@ package commands
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -35,23 +33,12 @@ type CmdXReadStream struct {
 }
 
 type CmdXReadArgs struct {
-	block int
-	// newOnly bool
+	block   int
 	streams []CmdXReadStream
 }
 
 func NewCmdXReadArgs(args rheltypes.Array) (parsed CmdXReadArgs) {
-	// parsed.newOnly = args.At(-1).String() == "$"
-	// lastIndex := len(args)
 	parsed.block = -1
-
-	// if parsed.newOnly {
-	// 	lastIndex--
-	// }
-
-	// args = args[:lastIndex]
-
-	log.Println(args)
 
 	streamsIndex := -1
 
@@ -78,8 +65,6 @@ func NewCmdXReadArgs(args rheltypes.Array) (parsed CmdXReadArgs) {
 	}
 
 	args = args[streamsIndex:]
-
-	log.Println(args)
 
 	half := len(args) / numXReadStreamSections
 
@@ -185,7 +170,6 @@ func (c CmdXRead) ReadLast(
 
 		case <-ctx.Done():
 			return value, nil
-			// case <-ticker.C:
 		}
 	}
 }
@@ -204,7 +188,6 @@ func (c CmdXRead) Exec(
 	}
 
 	if parsedArgs.block > -1 {
-		log.Println(parsedArgs.streams)
 		key := parsedArgs.streams[0].key
 
 		last, err := c.ReadLast(key, parsedArgs.block)
@@ -217,18 +200,12 @@ func (c CmdXRead) Exec(
 		lastArray := last.ToArray()
 
 		if len(valueArray) > 0 {
-			log.Println(hex.Dump(valueArray.Serialize()))
-
 			streamArray := valueArray.At(0).(rheltypes.Array)
 			stream := streamArray.At(1).(rheltypes.Array)
 			stream.Append(lastArray)
 			streamArray.Set(1, stream)
 			valueArray.Set(0, streamArray)
-
-			log.Println(hex.Dump(valueArray.Serialize()))
 		} else {
-			log.Println("new array")
-
 			valueArray = rheltypes.Array{
 				rheltypes.Array{
 					rheltypes.NewBulkString(key),
@@ -243,8 +220,6 @@ func (c CmdXRead) Exec(
 	}
 
 	value = valueArray
-
-	log.Println("normal return")
 
 	return value, err
 }

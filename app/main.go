@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -145,9 +144,6 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 		if end {
 			return
 		}
-
-		log.Println(hex.Dump(cmd))
-		log.Printf("%v", transaction)
 
 		if keep, err = masterExecuteCommand(conn, cmd, &transaction); err != nil {
 			errCh <- err
