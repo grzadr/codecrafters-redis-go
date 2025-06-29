@@ -151,13 +151,15 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 		}
 	}()
 
+	var transaction *commands.Transaction
+
 	for {
 		cmd, end := readCommand(conn, errCh)
 		if end {
 			return
 		}
 
-		if keep, err = masterExecuteCommand(conn, cmd); err != nil {
+		if keep, err = masterExecuteCommand(conn, cmd, transaction); err != nil {
 			errCh <- err
 
 			return
@@ -215,7 +217,7 @@ func sendHandshake(conn *net.TCPConn, port string) (err error) {
 }
 
 func replicaExecuteCommand(conn *net.TCPConn, cmd []byte) error {
-	for result := range commands.ExecuteCommand(cmd) {
+	for result := range commands.ExecuteCommand(cmd, nil) {
 		if result.Err != nil {
 			return result.Err
 		}
