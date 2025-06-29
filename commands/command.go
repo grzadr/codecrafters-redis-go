@@ -54,10 +54,6 @@ func (e CommandError) Error() string {
 		string(e.content), e.message, hex.Dump(e.content))
 }
 
-func NewCommandError(content []byte, message error) error {
-	return CommandError{content: content, message: message}
-}
-
 type RhelCommand interface {
 	isRhelCommand()
 	Name() string
@@ -210,30 +206,27 @@ func newParsedCommandFromBytes(
 	}
 }
 
-func (p *ParsedCommand) Transaction(t *Transaction) {
+func (p *ParsedCommand) Commit(t *Transaction) (err error) {
 	switch p.cmd.(type) {
 	case CmdMulti:
-		t = NewTransaction()
+		*t = *NewTransaction()
 
 		return
 	case CmdDiscard:
 
 	case CmdExec:
-		if tran != nil {
-			results, parsed.args, err := tran.Exec()
-			// TODO iterate results
-		} else {
-			parsed.args = nil
+		if t != nil {
+			_, p.args, err = t.Exec()
 		}
-
-		tran = nil
 	}
 
 	if t == nil {
 		p.args = nil
 	}
 
-	tran = nil
+	t = nil
+
+	return
 }
 
 func (p *ParsedCommand) Exec() (result *CommandResult) {
@@ -271,9 +264,13 @@ type CommandResult struct {
 }
 
 func newCommandResultQueued() (result *CommandResult) {
-	result.result = rheltypes.SimpleString("QUEUED")
+	result = &CommandResult{result: rheltypes.SimpleString("QUEUED")}
 
 	return
+}
+
+func NewCommandErrorResponse(content []byte, message error) *CommandResult {
+	return &CommandResult{Err: CommandError{content: content, message: message}}
 }
 
 func (r CommandResult) Serialize() []byte {
@@ -296,7 +293,23 @@ func NewTransaction() *Transaction {
 	}
 }
 
-func (t Transaction) Exec() (results []CommandResult, responses rheltypes.Array, err error) {
+func (t Transaction) Exec() (results []*CommandResult, responses rheltypes.Array, err error) {
+	results = make([]*CommandResult, len(t.cmds))
+	responses = make(rheltypes.Array, len(t.cmds))
+
+	for i, c := range t.cmds {
+		r := c.Exec()
+
+		if r.Err != nil {
+			err = r.Err
+
+			return
+		}
+
+		results[i] = r
+		responses[i] = r.result
+	}
+
 	return
 }
 
@@ -307,21 +320,20 @@ func ExecuteCommand(
 	return func(yield func(*CommandResult) bool) {
 		for parsed := range newParsedCommandFromBytes(command) {
 			if err := parsed.err; err != nil {
-				yield(&CommandResult{Err: NewCommandError(command, err)})
+				yield(NewCommandErrorResponse(command, err))
 
 				return
 			}
+
+			parsed.Commit(tran)
 
 			var result *CommandResult
 
 			if tran != nil {
 				tran.cmds = append(tran.cmds, parsed)
 				result = newCommandResultQueued()
-			} else if result := newCommandResult(parsed); parsed.err != nil {
-			}
-
-			if err := parsed.err; err != nil {
-				result.Err = NewCommandError(command, err)
+			} else if result := parsed.Exec(); result.Err != nil {
+				result = NewCommandErrorResponse(command, result.Err)
 			}
 
 			if !yield(result) || result.Err != nil {
