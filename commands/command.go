@@ -210,31 +210,34 @@ func newParsedCommandFromBytes(
 	}
 }
 
-func (p *ParsedCommand) Exec()
-
-type CommandResult struct {
-	result         rheltypes.RhelType
-	KeepConnection bool
-	Resend         bool
-	ReplicaRespond bool
-	Err            error
-	Size           int
-	Ack            int
-}
-
-func newCommandResultQueued() (result *CommandResult) {
-	result.result = rheltypes.SimpleString("QUEUED")
-
-	return
-}
-
-func newCommandResult(p *ParsedCommand) (result *CommandResult) {
-	result = &CommandResult{}
-	if err := p.err; err != nil {
-		result.Err = err
+func (p *ParsedCommand) Transaction(t *Transaction) {
+	switch p.cmd.(type) {
+	case CmdMulti:
+		t = NewTransaction()
 
 		return
+	case CmdDiscard:
+
+	case CmdExec:
+		if tran != nil {
+			results, parsed.args, err := tran.Exec()
+			// TODO iterate results
+		} else {
+			parsed.args = nil
+		}
+
+		tran = nil
 	}
+
+	if t == nil {
+		p.args = nil
+	}
+
+	tran = nil
+}
+
+func (p *ParsedCommand) Exec() (result *CommandResult) {
+	result = &CommandResult{}
 
 	cmd := p.cmd
 
@@ -253,6 +256,22 @@ func newCommandResult(p *ParsedCommand) (result *CommandResult) {
 	result.ReplicaRespond = cmd.ReplicaRespond()
 	result.Size = p.size
 	result.Ack = p.ack
+
+	return
+}
+
+type CommandResult struct {
+	result         rheltypes.RhelType
+	KeepConnection bool
+	Resend         bool
+	ReplicaRespond bool
+	Err            error
+	Size           int
+	Ack            int
+}
+
+func newCommandResultQueued() (result *CommandResult) {
+	result.result = rheltypes.SimpleString("QUEUED")
 
 	return
 }
@@ -287,25 +306,10 @@ func ExecuteCommand(
 ) iter.Seq[*CommandResult] {
 	return func(yield func(*CommandResult) bool) {
 		for parsed := range newParsedCommandFromBytes(command) {
-			// TODO send parsing error
-			switch c := parsed.cmd.(type) {
-			case CmdMulti:
-				tran = NewTransaction()
-			case CmdExec:
-				if tran != nil {
-					results, parsed.args, err := tran.Exec()
-					// TODO iterate results
-				} else {
-					parsed.args = nil
-				}
+			if err := parsed.err; err != nil {
+				yield(&CommandResult{Err: NewCommandError(command, err)})
 
-				tran = nil
-			case CmdDiscard:
-				if tran == nil {
-					parsed.args = nil
-				}
-
-				tran = nil
+				return
 			}
 
 			var result *CommandResult
