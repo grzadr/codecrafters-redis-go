@@ -16,8 +16,10 @@ func NewCmdDiscard() CmdDiscard {
 
 func (c CmdDiscard) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
 	if args == nil {
-		return rheltypes.NewGenericError(fmt.Errorf("EXEC without MULTI")), nil
+		return rheltypes.NewGenericError(
+			fmt.Errorf("DISCARD without MULTI"),
+		), nil
 	} else {
-		return args, nil
+		return rheltypes.SimpleString("OK"), nil
 	}
 }
