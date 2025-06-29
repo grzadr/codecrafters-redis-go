@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -93,7 +94,7 @@ func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, end bool) {
 func masterExecuteCommand(
 	conn *net.TCPConn,
 	cmd []byte,
-	transaction *commands.Transaction,
+	transaction **commands.Transaction,
 ) (keepConn bool, err error) {
 	for result := range commands.ExecuteCommand(cmd, transaction) {
 		if err = sendResponse(conn, result); err != nil {
@@ -145,7 +146,10 @@ func handleConn(conn *net.TCPConn, errCh chan error) {
 			return
 		}
 
-		if keep, err = masterExecuteCommand(conn, cmd, transaction); err != nil {
+		log.Println(hex.Dump(cmd))
+		log.Printf("%v", transaction)
+
+		if keep, err = masterExecuteCommand(conn, cmd, &transaction); err != nil {
 			errCh <- err
 
 			return
@@ -203,7 +207,8 @@ func sendHandshake(conn *net.TCPConn, port string) (err error) {
 }
 
 func replicaExecuteCommand(conn *net.TCPConn, cmd []byte) error {
-	for result := range commands.ExecuteCommand(cmd, nil) {
+	var transaction *commands.Transaction
+	for result := range commands.ExecuteCommand(cmd, &transaction) {
 		if result.Err != nil {
 			return result.Err
 		}

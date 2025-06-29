@@ -207,29 +207,39 @@ func newParsedCommandFromBytes(
 	}
 }
 
-func (p *ParsedCommand) Commit(t *Transaction) (err error) {
+func (p *ParsedCommand) Commit(t **Transaction) (err error) {
+	log.Println("commit")
+
 	switch p.cmd.(type) {
 	case CmdMulti:
-		t = NewTransaction()
+		log.Println("multi")
 
-		return
+		*t = NewTransaction()
+
+		return err
 	case CmdDiscard:
+		log.Println("discard")
 
+		if *t == nil {
+			p.args = nil
+		}
+
+		*t = nil
 	case CmdExec:
-		if t != nil {
+		log.Println("exec")
+
+		if *t != nil {
 			log.Println("executed")
 
-			_, p.args, err = t.Exec()
+			_, p.args, err = (*t).Exec()
+		} else {
+			p.args = nil
 		}
+
+		*t = nil
 	}
 
-	if t == nil {
-		p.args = nil
-	}
-
-	t = nil
-
-	return
+	return err
 }
 
 func (p *ParsedCommand) Exec() (result *CommandResult) {
@@ -318,7 +328,7 @@ func (t Transaction) Exec() (results []*CommandResult, responses rheltypes.Array
 
 func ExecuteCommand(
 	command []byte,
-	tran *Transaction,
+	tran **Transaction,
 ) iter.Seq[*CommandResult] {
 	return func(yield func(*CommandResult) bool) {
 		for parsed := range newParsedCommandFromBytes(command) {
@@ -332,8 +342,8 @@ func ExecuteCommand(
 
 			var result *CommandResult
 
-			if tran != nil {
-				tran.cmds = append(tran.cmds, parsed)
+			if *tran != nil && !parsed.multi {
+				(*tran).cmds = append((*tran).cmds, parsed)
 				result = newCommandResultQueued()
 			} else if result = parsed.Exec(); result.Err != nil {
 				result = NewCommandErrorResponse(command, result.Err)
