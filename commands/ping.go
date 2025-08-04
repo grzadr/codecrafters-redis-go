@@ -19,3 +19,5 @@ func (c CmdPing) Exec(args rheltypes.Array) (rheltypes.RhelType, error) {
 func (c CmdPing) Render() (cmd rheltypes.Array) {
 	return rheltypes.NewArrayFromStrings([]string{string(c.BaseCommand)})
 }
+
+func (c CmdPing) AllowedInSubscription() bool { return true }

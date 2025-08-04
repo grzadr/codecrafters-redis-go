@@ -121,39 +121,6 @@ func (c CmdXRead) ReadAll(
 	return values, err
 }
 
-// func (c CmdXRead) ReadLast(
-// 	key string, timeout int,
-// ) (value rheltypes.StreamItem, err error) {
-// 	sub := pubsub.GetStreamManager().Subscribe(key, false)
-// 	defer sub.Close()
-
-// 	ticker := time.NewTicker(defaultWaitTicker)
-// 	defer ticker.Stop()
-
-// 	ctx, cancel := pubsub.CreateContextFromTimeout(timeout)
-// 	defer cancel()
-
-// 	for {
-// 		select {
-// 		case msg := <-sub.Messages:
-// 			stream, ok := msg.(*rheltypes.StreamItem)
-
-// 			if !ok {
-// 				return value, fmt.Errorf(
-// 					"expected stream, got %T %v",
-// 					msg,
-// 					msg,
-// 				)
-// 			}
-
-// 			return *stream, nil
-
-// 		case <-ctx.Done():
-// 			return value, nil
-// 		}
-// 	}
-// }
-
 func (c CmdXRead) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {

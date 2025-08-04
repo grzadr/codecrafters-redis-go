@@ -5,22 +5,21 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
-const cmdSubscribeResultNumPos = 2
-
-type CmdSubscribe struct {
+type CmdUnsubscribe struct {
 	BaseCommand
 }
 
-func NewCmdSubscribe() CmdSubscribe {
-	return CmdSubscribe{BaseCommand: BaseCommand("SUBSCRIBE")}
+func NewCmdUnsubscribe() CmdUnsubscribe {
+	return CmdUnsubscribe{BaseCommand: BaseCommand("UNSUBSCRIBE")}
 }
 
-func (c CmdSubscribe) Exec(
+func (c CmdUnsubscribe) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
 	key := args.At(0).String()
+	id, _ := args.At(1).Integer()
 
-	sub := pubsub.GetStreamManager().Subscribe(key, true)
+	pubsub.GetStreamManager().Unsubscribe(key, id)
 
 	// // timeout, _ := args.At(1).Float()
 	// last, err := pubsub.ReadLast(key, int(timeout*milisecondInSecond))
@@ -35,10 +34,9 @@ func (c CmdSubscribe) Exec(
 	// 		last,
 	// 	}, nil
 	// }
-	arr := rheltypes.NewArrayFromStrings([]string{"subscribe", key})
-	value = append(arr, rheltypes.Integer(sub.Id))
+	arr := rheltypes.NewArrayFromStrings([]string{"unsubscribe", key})
 
-	return value, nil
+	return append(arr, rheltypes.Integer(0)), nil
 }
 
-func (c CmdSubscribe) AllowedInSubscription() bool { return true }
+func (c CmdUnsubscribe) AllowedInSubscription() bool { return true }

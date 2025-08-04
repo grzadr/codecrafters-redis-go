@@ -24,7 +24,7 @@ type (
 
 // Subscription represents a single Subscription to a stream.
 type Subscription struct {
-	id       int
+	Id       int
 	Messages chan Message
 	Done     doneChannel
 	once     sync.Once
@@ -33,7 +33,7 @@ type Subscription struct {
 
 func newSubscription(id int, unsub chan int) *Subscription {
 	return &Subscription{
-		id:       id,
+		Id:       id,
 		Messages: make(chan Message, 1),
 		Done:     make(doneChannel),
 		unsub:    unsub,
@@ -43,7 +43,7 @@ func newSubscription(id int, unsub chan int) *Subscription {
 func (sub *Subscription) Close() {
 	sub.once.Do(func() {
 		close(sub.Messages)
-		sub.unsub <- sub.id
+		sub.unsub <- sub.Id
 		close(sub.Done)
 	})
 }
@@ -93,7 +93,7 @@ func (s *stream) subscribe() *Subscription {
 
 	sub := newSubscription(s.lastId, s.unsub)
 	s.lastId++
-	s.subscribers[sub.id] = sub
+	s.subscribers[sub.Id] = sub
 
 	return sub
 }
@@ -238,30 +238,6 @@ func (m *StreamManager) Publish(streamName string, msg any) {
 	}
 }
 
-// // Unsubscribe removes a subscriber from a stream.
-// func (ps *PubSub) Unsubscribe(streamName, subscriberID string) {
-// 	ps.mu.RLock()
-// 	st, exists := ps.streams[streamName]
-// 	ps.mu.RUnlock()
-
-// 	if !exists {
-// 		return
-// 	}
-
-// 	select {
-// 	case st.unsubscribe <- subscriberID:
-// 	case <-st.quit:
-// 	}
-// }
-
-// CloseStream closes a specific stream.
-// func (m *StreamManager) CloseStream(streamName string) {
-// 	m.mu.Lock()
-// 	defer m.mu.Unlock()
-
-// 	m.closeStreamLocked(streamName)
-// }
-
 // Close closes all streams.
 func (m *StreamManager) Close() {
 	m.mu.Lock()
@@ -285,13 +261,20 @@ func (m *StreamManager) Close() {
 	m.streams = nil
 }
 
-// closeStreamLocked closes a stream (assumes lock is held).
-// func (m *StreamManager) closeStreamLocked(streamName string) {
-// 	if st, exists := m.streams[streamName]; exists {
-// 		close(st.closed)
-// 		delete(m.streams, streamName)
-// 	}
-// }
+func (m *StreamManager) Unsubscribe(
+	streamName string,
+	subscriptionId int,
+) {
+	m.mu.RLock()
+	st, exists := m.streams[streamName]
+	m.mu.RUnlock()
+
+	if !exists {
+		return
+	}
+
+	st.subscribers[subscriptionId].Close()
+}
 
 func (m *StreamManager) run() {
 	for {

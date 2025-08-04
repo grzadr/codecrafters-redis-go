@@ -61,6 +61,7 @@ type RhelCommand interface {
 	Exec(args rheltypes.Array) (rheltypes.RhelType, error)
 	Resend() bool
 	ReplicaRespond() bool
+	AllowedInSubscription() bool
 }
 
 type BaseCommand string
@@ -87,34 +88,37 @@ func (c BaseCommand) Resend() bool { return false }
 
 func (c BaseCommand) ReplicaRespond() bool { return false }
 
+func (c BaseCommand) AllowedInSubscription() bool { return false }
+
 func (BaseCommand) isRhelCommand() {}
 
 var commandMap = map[string]func() RhelCommand{
-	"SUBSCRIBE": func() RhelCommand { return NewCmdSubscribe() },
-	"BLPOP":     func() RhelCommand { return NewCmdBLPop() },
-	"CONFIG":    func() RhelCommand { return NewCmdConfig() },
-	"DISCARD":   func() RhelCommand { return NewCmdDiscard() },
-	"ECHO":      func() RhelCommand { return NewCmdEcho() },
-	"EXEC":      func() RhelCommand { return NewCmdExec() },
-	"GET":       func() RhelCommand { return NewCmdGet() },
-	"INCR":      func() RhelCommand { return NewCmdIncr() },
-	"INFO":      func() RhelCommand { return NewCmdInfo() },
-	"KEYS":      func() RhelCommand { return NewCmdKeys() },
-	"LLEN":      func() RhelCommand { return NewCmdLLen() },
-	"LPOP":      func() RhelCommand { return NewCmdLPop() },
-	"LPUSH":     func() RhelCommand { return NewCmdLPush() },
-	"LRANGE":    func() RhelCommand { return NewCmdLRange() },
-	"MULTI":     func() RhelCommand { return NewCmdMulti() },
-	"PING":      func() RhelCommand { return NewCmdPing() },
-	"PSYNC":     func() RhelCommand { return NewCmdPsync() },
-	"REPLCONF":  func() RhelCommand { return NewCmdReplconf() },
-	"RPUSH":     func() RhelCommand { return NewCmdRPush() },
-	"SET":       func() RhelCommand { return NewCmdSet() },
-	"TYPE":      func() RhelCommand { return NewCmdType() },
-	"WAIT":      func() RhelCommand { return NewCmdWait() },
-	"XADD":      func() RhelCommand { return NewCmdXAdd() },
-	"XRANGE":    func() RhelCommand { return NewCmdXRange() },
-	"XREAD":     func() RhelCommand { return NewCmdXRead() },
+	"BLPOP":       func() RhelCommand { return NewCmdBLPop() },
+	"CONFIG":      func() RhelCommand { return NewCmdConfig() },
+	"DISCARD":     func() RhelCommand { return NewCmdDiscard() },
+	"ECHO":        func() RhelCommand { return NewCmdEcho() },
+	"EXEC":        func() RhelCommand { return NewCmdExec() },
+	"GET":         func() RhelCommand { return NewCmdGet() },
+	"INCR":        func() RhelCommand { return NewCmdIncr() },
+	"INFO":        func() RhelCommand { return NewCmdInfo() },
+	"KEYS":        func() RhelCommand { return NewCmdKeys() },
+	"LLEN":        func() RhelCommand { return NewCmdLLen() },
+	"LPOP":        func() RhelCommand { return NewCmdLPop() },
+	"LPUSH":       func() RhelCommand { return NewCmdLPush() },
+	"LRANGE":      func() RhelCommand { return NewCmdLRange() },
+	"MULTI":       func() RhelCommand { return NewCmdMulti() },
+	"PING":        func() RhelCommand { return NewCmdPing() },
+	"PSYNC":       func() RhelCommand { return NewCmdPsync() },
+	"REPLCONF":    func() RhelCommand { return NewCmdReplconf() },
+	"RPUSH":       func() RhelCommand { return NewCmdRPush() },
+	"SET":         func() RhelCommand { return NewCmdSet() },
+	"SUBSCRIBE":   func() RhelCommand { return NewCmdSubscribe() },
+	"TYPE":        func() RhelCommand { return NewCmdType() },
+	"UNSUBSCRIBE": func() RhelCommand { return NewCmdUnsubscribe() },
+	"WAIT":        func() RhelCommand { return NewCmdWait() },
+	"XADD":        func() RhelCommand { return NewCmdXAdd() },
+	"XRANGE":      func() RhelCommand { return NewCmdXRange() },
+	"XREAD":       func() RhelCommand { return NewCmdXRead() },
 }
 
 func NewRhelCommand(name string) RhelCommand {
@@ -133,6 +137,7 @@ type ParsedCommand struct {
 	ack   int
 	multi bool
 	exec  bool
+	sub   int
 }
 
 func newParsedCommandErr(err error) (parsed *ParsedCommand) {
@@ -214,7 +219,7 @@ func newParsedCommandFromBytes(
 
 func (p *ParsedCommand) Commit(t **Transaction) (err error) {
 	switch p.cmd.(type) {
-	case CmdMulti:
+	case CmdMulti, CmdSubscribe:
 		*t = NewTransaction()
 
 		return err
@@ -237,8 +242,13 @@ func (p *ParsedCommand) Commit(t **Transaction) (err error) {
 	return err
 }
 
-func (p *ParsedCommand) Exec() (result *CommandResult) {
+func (p *ParsedCommand) Exec(t **Transaction) (result *CommandResult) {
 	result = &CommandResult{}
+	if !p.verifySubscription(t) {
+		result.result = p.newErrorForbiddenCommand()
+
+		return result
+	}
 
 	cmd := p.cmd
 
@@ -250,7 +260,11 @@ func (p *ParsedCommand) Exec() (result *CommandResult) {
 			err,
 		)
 
-		return
+		return result
+	}
+
+	if *t != nil {
+		(*t).digestSubscription(cmd, result)
 	}
 
 	result.Resend = cmd.Resend()
@@ -258,7 +272,20 @@ func (p *ParsedCommand) Exec() (result *CommandResult) {
 	result.Size = p.size
 	result.Ack = p.ack
 
-	return
+	return result
+}
+
+func (p *ParsedCommand) verifySubscription(t **Transaction) bool {
+	return p.cmd.AllowedInSubscription() || *t == nil || !(*t).isSubscribed()
+}
+
+func (p *ParsedCommand) newErrorForbiddenCommand() rheltypes.Error {
+	return rheltypes.NewGenericError(
+		fmt.Errorf(
+			"Can't execute '%s': only (P|S)SUBSCRIBE / (P|S)UNSUBSCRIBE / PING / QUIT / RESET are allowed in this context",
+			strings.ToLower(p.cmd.Name()),
+		),
+	)
 }
 
 type CommandResult struct {
@@ -292,21 +319,23 @@ func (r CommandResult) Serialize() []byte {
 const defaultTransactionCapacity = 16
 
 type Transaction struct {
-	cmds []*ParsedCommand
+	cmds          []*ParsedCommand
+	subscriptions map[string]int
 }
 
 func NewTransaction() *Transaction {
 	return &Transaction{
-		cmds: make([]*ParsedCommand, 0, defaultTransactionCapacity),
+		cmds:          make([]*ParsedCommand, 0, defaultTransactionCapacity),
+		subscriptions: make(map[string]int, defaultTransactionCapacity),
 	}
 }
 
-func (t Transaction) Exec() (results []*CommandResult, responses rheltypes.Array, err error) {
+func (t *Transaction) Exec() (results []*CommandResult, responses rheltypes.Array, err error) {
 	results = make([]*CommandResult, len(t.cmds))
 	responses = make(rheltypes.Array, len(t.cmds))
 
 	for i, c := range t.cmds {
-		r := c.Exec()
+		r := c.Exec(&t)
 
 		if r.Err != nil {
 			err = r.Err
@@ -321,6 +350,45 @@ func (t Transaction) Exec() (results []*CommandResult, responses rheltypes.Array
 	return
 }
 
+func (t *Transaction) numSubscriptions() int {
+	return len(t.subscriptions)
+}
+
+func (t *Transaction) isSubscribed() bool {
+	return t.numSubscriptions() > 0
+}
+
+func (t *Transaction) digestSubscription(
+	cmd RhelCommand,
+	result *CommandResult,
+) {
+	switch cmd.(type) {
+	case CmdSubscribe:
+		arr := result.result.(rheltypes.Array)
+		key := arr.At(1).String()
+		id, _ := arr.At(cmdSubscribeResultNumPos).Integer()
+
+		(*t).subscriptions[key] = id
+
+		arr.Set(cmdSubscribeResultNumPos, rheltypes.Integer(t.numSubscriptions()))
+
+		result.result = arr
+	case CmdUnsubscribe:
+		arr := result.result.(rheltypes.Array)
+		key := arr.At(1).String()
+
+		delete((*t).subscriptions, key)
+
+		arr.Set(cmdSubscribeResultNumPos, rheltypes.Integer(t.numSubscriptions()))
+	case CmdPing:
+		if !t.isSubscribed() {
+			return
+		}
+
+		result.result = rheltypes.NewArrayFromStrings([]string{"pong", ""})
+	}
+}
+
 func ExecuteCommand(
 	command []byte,
 	tran **Transaction,
@@ -333,14 +401,18 @@ func ExecuteCommand(
 				return
 			}
 
-			parsed.Commit(tran)
+			if err := parsed.Commit(tran); err != nil {
+				yield(NewCommandErrorResponse(command, err))
+
+				return
+			}
 
 			var result *CommandResult
 
 			if *tran != nil && !parsed.multi {
 				(*tran).cmds = append((*tran).cmds, parsed)
 				result = newCommandResultQueued()
-			} else if result = parsed.Exec(); result.Err != nil {
+			} else if result = parsed.Exec(tran); result.Err != nil {
 				result = NewCommandErrorResponse(command, result.Err)
 			}
 
