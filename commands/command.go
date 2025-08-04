@@ -102,6 +102,7 @@ var commandMap = map[string]func() RhelCommand{
 	"PING":     func() RhelCommand { return NewCmdPing() },
 	"PSYNC":    func() RhelCommand { return NewCmdPsync() },
 	"REPLCONF": func() RhelCommand { return NewCmdReplconf() },
+	"RPUSH":    func() RhelCommand { return NewCmdRPush() },
 	"SET":      func() RhelCommand { return NewCmdSet() },
 	"TYPE":     func() RhelCommand { return NewCmdType() },
 	"WAIT":     func() RhelCommand { return NewCmdWait() },
@@ -352,19 +353,3 @@ func ExecuteCommand(
 		}
 	}
 }
-
-// func ExecuteCommand(command []byte) (result rheltypes.RhelType, err error) {
-// 	cmd, args, err := parseCommand(command)
-// 	if err != nil {
-// 		return nil, NewCommandError(command, err)
-// 	}
-
-// 	result, err = cmd.Exec(args)
-// 	if err != nil {
-// 		return nil, NewCommandError(command, err)
-// 	}
-
-// 	if cmd.(CmdPsync)
-
-// 	return
-// }
