@@ -1,10 +1,12 @@
 package pubsub
 
 import (
+	"context"
 	"iter"
 	"maps"
 	"slices"
 	"sync"
+	"time"
 )
 
 const defaultStreamCapacity = 64
@@ -325,4 +327,40 @@ func GetStreamManager() *StreamManager {
 	})
 
 	return streamManager
+}
+
+func CreateContextFromTimeout(
+	timeoutMS int,
+) (context.Context, context.CancelFunc) {
+	switch {
+	case timeoutMS == 0:
+		// Infinite timeout with cancellation capability
+		return context.WithCancel(context.Background())
+	case timeoutMS > 0:
+		// Explicit timeout duration
+		duration := time.Duration(timeoutMS) * time.Millisecond
+
+		return context.WithTimeout(context.Background(), duration)
+	default:
+		// Invalid negative values default to no timeout
+		return context.Background(), func() {}
+	}
+}
+
+func ReadLast(key string, timeout int) (any, error) {
+	sub := GetStreamManager().Subscribe(key, true)
+	defer sub.Close()
+
+	ctx, cancel := CreateContextFromTimeout(timeout)
+	defer cancel()
+
+	for {
+		select {
+		case msg := <-sub.Messages:
+			return msg, nil
+
+		case <-ctx.Done():
+			return nil, nil
+		}
+	}
 }

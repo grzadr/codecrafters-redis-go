@@ -1,10 +1,8 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
@@ -123,56 +121,38 @@ func (c CmdXRead) ReadAll(
 	return values, err
 }
 
-func createContextFromTimeout(
-	timeoutMS int,
-) (context.Context, context.CancelFunc) {
-	switch {
-	case timeoutMS == 0:
-		// Infinite timeout with cancellation capability
-		return context.WithCancel(context.Background())
-	case timeoutMS > 0:
-		// Explicit timeout duration
-		duration := time.Duration(timeoutMS) * time.Millisecond
+// func (c CmdXRead) ReadLast(
+// 	key string, timeout int,
+// ) (value rheltypes.StreamItem, err error) {
+// 	sub := pubsub.GetStreamManager().Subscribe(key, false)
+// 	defer sub.Close()
 
-		return context.WithTimeout(context.Background(), duration)
-	default:
-		// Invalid negative values default to no timeout
-		return context.Background(), func() {}
-	}
-}
+// 	ticker := time.NewTicker(defaultWaitTicker)
+// 	defer ticker.Stop()
 
-func (c CmdXRead) ReadLast(
-	key string, timeout int,
-) (value rheltypes.StreamItem, err error) {
-	sub := pubsub.GetStreamManager().Subscribe(key, false)
-	defer sub.Close()
+// 	ctx, cancel := pubsub.CreateContextFromTimeout(timeout)
+// 	defer cancel()
 
-	ticker := time.NewTicker(defaultWaitTicker)
-	defer ticker.Stop()
+// 	for {
+// 		select {
+// 		case msg := <-sub.Messages:
+// 			stream, ok := msg.(*rheltypes.StreamItem)
 
-	ctx, cancel := createContextFromTimeout(timeout)
-	defer cancel()
+// 			if !ok {
+// 				return value, fmt.Errorf(
+// 					"expected stream, got %T %v",
+// 					msg,
+// 					msg,
+// 				)
+// 			}
 
-	for {
-		select {
-		case msg := <-sub.Messages:
-			stream, ok := msg.(*rheltypes.StreamItem)
+// 			return *stream, nil
 
-			if !ok {
-				return value, fmt.Errorf(
-					"expected stream, got %T %v",
-					msg,
-					msg,
-				)
-			}
-
-			return *stream, nil
-
-		case <-ctx.Done():
-			return value, nil
-		}
-	}
-}
+// 		case <-ctx.Done():
+// 			return value, nil
+// 		}
+// 	}
+// }
 
 func (c CmdXRead) Exec(
 	args rheltypes.Array,
@@ -190,12 +170,16 @@ func (c CmdXRead) Exec(
 	if parsedArgs.block > -1 {
 		key := parsedArgs.streams[0].key
 
-		last, err := c.ReadLast(key, parsedArgs.block)
+		lastItem, err := pubsub.ReadLast(key, parsedArgs.block)
 		if err != nil {
 			return nil, c.ErrWrap(fmt.Errorf("failed to read last: %w", err))
-		} else if last.Size() == 0 {
+		}
+
+		if lastItem != nil {
 			return rheltypes.NewNullBulkString(), nil
 		}
+
+		last := *lastItem.(*rheltypes.StreamItem)
 
 		lastArray := last.ToArray()
 
