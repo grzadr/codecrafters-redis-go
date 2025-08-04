@@ -66,4 +66,6 @@ func (e Error) TypeName() string {
 	return "error"
 }
 
+func (e Error) Float() (float64, error) { return 0, nil }
+
 func (e Error) isRhelType() {}

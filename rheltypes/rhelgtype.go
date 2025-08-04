@@ -14,6 +14,7 @@ type RhelType interface {
 	Size() int
 	First() RhelType
 	TypeName() string
+	Float() (float64, error)
 }
 
 type rhelPrefix string

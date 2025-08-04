@@ -14,12 +14,18 @@ func NewCmdLRange() CmdLRange {
 	return CmdLRange{BaseCommand: BaseCommand("LRANGE")}
 }
 
+const (
+	cmdLRangeKeyArg   = 0
+	cmdLRangeStartArg = 1
+	cmdLRangeStopArg  = 2
+)
+
 func (c CmdLRange) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	key := args.At(0).String()
-	start, _ := args.At(1).Integer()
-	stop, _ := args.At(2).Integer()
+	key := args.At(cmdLRangeKeyArg).String()
+	start, _ := args.At(cmdLRangeStartArg).Integer()
+	stop, _ := args.At(cmdLRangeStopArg).Integer()
 
 	instance := GetDataMapInstance()
 

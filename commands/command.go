@@ -90,6 +90,7 @@ func (c BaseCommand) ReplicaRespond() bool { return false }
 func (BaseCommand) isRhelCommand() {}
 
 var commandMap = map[string]func() RhelCommand{
+	"BLPOP":    func() RhelCommand { return NewCmdBLPop() },
 	"CONFIG":   func() RhelCommand { return NewCmdConfig() },
 	"DISCARD":  func() RhelCommand { return NewCmdDiscard() },
 	"ECHO":     func() RhelCommand { return NewCmdEcho() },

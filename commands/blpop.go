@@ -1,0 +1,73 @@
+package commands
+
+import (
+	"fmt"
+	"time"
+
+	"github.com/codecrafters-io/redis-starter-go/pubsub"
+	"github.com/codecrafters-io/redis-starter-go/rheltypes"
+)
+
+type CmdBLPop struct {
+	BaseCommand
+}
+
+func NewCmdBLPop() CmdBLPop {
+	return CmdBLPop{BaseCommand: BaseCommand("BLPOP")}
+}
+
+const milisecondInSecond = 1000
+
+func (c CmdBLPop) ReadLast(
+	key string, timeout int,
+) (rheltypes.RhelType, error) {
+	sub := pubsub.GetStreamManager().Subscribe(key, true)
+	defer sub.Close()
+
+	ticker := time.NewTicker(defaultWaitTicker)
+	defer ticker.Stop()
+
+	ctx, cancel := createContextFromTimeout(timeout)
+	defer cancel()
+
+	for {
+		select {
+		case msg := <-sub.Messages:
+			item, ok := msg.(rheltypes.RhelType)
+
+			if !ok {
+				return nil, fmt.Errorf(
+					"expected stream, got %T %v",
+					msg,
+					msg,
+				)
+			}
+
+			return item, nil
+
+		case <-ctx.Done():
+			return nil, nil
+		}
+	}
+}
+
+func (c CmdBLPop) Exec(
+	args rheltypes.Array,
+) (value rheltypes.RhelType, err error) {
+	key := args.At(0).String()
+
+	timeout, _ := args.At(1).Float()
+
+	last, err := c.ReadLast(key, int(timeout)*milisecondInSecond)
+
+	if err != nil {
+		return nil, c.ErrWrap(fmt.Errorf("failed to read last: %w", err))
+	} else if last == nil {
+		return rheltypes.NewNullBulkString(), nil
+	} else {
+		return rheltypes.Array{
+			rheltypes.NewBulkString(key),
+			last,
+		}, nil
+	}
+}

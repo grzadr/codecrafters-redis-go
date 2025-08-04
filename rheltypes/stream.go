@@ -259,6 +259,8 @@ func (s Stream) Integer() (int, error) {
 	return 0, nil
 }
 
+func (s Stream) Float() (float64, error) { return 0, nil }
+
 func helperItemIdCompare(item StreamItem, id StreamItemId) int {
 	return item.id.Cmp(id)
 }

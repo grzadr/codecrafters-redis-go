@@ -7,7 +7,7 @@ import (
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
-var defaultWaitTicker = 10 * time.Millisecond
+var defaultWaitTicker = 5 * time.Millisecond
 
 type CmdWait struct {
 	BaseCommand

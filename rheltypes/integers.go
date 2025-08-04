@@ -52,4 +52,6 @@ func (i Integer) TypeName() string {
 	return "integer"
 }
 
+func (i Integer) Float() (float64, error) { return float64(i), nil }
+
 func (Integer) isRhelType() {}

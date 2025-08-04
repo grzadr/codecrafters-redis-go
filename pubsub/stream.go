@@ -1,6 +1,9 @@
 package pubsub
 
 import (
+	"iter"
+	"maps"
+	"slices"
 	"sync"
 )
 
@@ -57,11 +60,12 @@ type stream struct {
 	msg         chan Message
 	sub         chan *Subscription
 	unsub       chan int
+	sendFirst   bool          // send only to first subscriber
 	done        chan struct{} // sends message when done
 	quit        chan struct{} // receives signal to quit
 }
 
-func newStream(quit chan struct{}) *stream {
+func newStream(quit chan struct{}, sendFirst bool) *stream {
 	return &stream{
 		subscribers: make(map[int]*Subscription, defaultStreamCapacity),
 		sub:         make(chan *Subscription, 1),
@@ -69,6 +73,7 @@ func newStream(quit chan struct{}) *stream {
 		unsub:       make(chan int, 1),
 		done:        make(chan struct{}),
 		quit:        quit,
+		sendFirst:   sendFirst,
 	}
 }
 
@@ -91,13 +96,32 @@ func (s *stream) subscribe() *Subscription {
 	return sub
 }
 
+func (s *stream) iterSubscriptions() iter.Seq[*Subscription] {
+	if s.sendFirst {
+		return func(yield func(*Subscription) bool) {
+			// keys := slices.Collect()
+			for key := range slices.Sorted(maps.Keys(s.subscribers)) {
+				if !yield(s.subscribers[key]) {
+					return
+				}
+			}
+		}
+	} else {
+		return maps.Values(s.subscribers)
+	}
+}
+
 func (s *stream) publishMsg(msg Message) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	for _, sub := range s.subscribers {
+loop:
+	for sub := range s.iterSubscriptions() {
 		select {
 		case sub.Messages <- msg:
+			if s.sendFirst {
+				break loop
+			}
 		case <-sub.Done:
 		default:
 			sub.Close()
@@ -178,13 +202,16 @@ func newStreamManager() *StreamManager {
 }
 
 // Subscribe creates a subscription to a stream.
-func (m *StreamManager) Subscribe(streamName string) *Subscription {
+func (m *StreamManager) Subscribe(
+	streamName string,
+	sendFirst bool,
+) *Subscription {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	st, exists := m.streams[streamName]
 	if !exists {
-		st = newStream(m.quit)
+		st = newStream(m.quit, sendFirst)
 		m.streams[streamName] = st
 
 		go st.run()

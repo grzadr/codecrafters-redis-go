@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/codecrafters-io/redis-starter-go/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -52,8 +53,12 @@ func (c CmdRPush) Exec(
 		return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
 	}
 
+	sm := pubsub.GetStreamManager()
+
 	for _, item := range parsedArgs.Items {
 		list = append(list, item)
+
+		go sm.Publish(parsedArgs.Key, item)
 	}
 
 	instance.Set(parsedArgs.Key, list)

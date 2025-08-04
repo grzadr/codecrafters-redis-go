@@ -125,6 +125,8 @@ func (a Array) Range(start, stop int) (out Array) {
 	return
 }
 
+func (a Array) Float() (float64, error) { return 0, nil }
+
 func (a Array) normalizePos(pos int) int {
 	if pos < 0 {
 		return max(0, len(a)+pos)

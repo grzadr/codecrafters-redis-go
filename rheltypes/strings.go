@@ -38,6 +38,8 @@ func (s SimpleString) TypeName() string {
 	return "string"
 }
 
+func (s SimpleString) Float() (float64, error) { return strconv.ParseFloat(string(s), 64) }
+
 func (s SimpleString) isRhelType() {}
 
 type BulkString struct {
@@ -166,5 +168,7 @@ func (s BulkString) IsTerminated() bool {
 func (s BulkString) TypeName() string {
 	return "string"
 }
+
+func (s BulkString) Float() (float64, error) { return strconv.ParseFloat(string(s.Text), 64) }
 
 func (s BulkString) isRhelType() {}

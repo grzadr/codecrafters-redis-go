@@ -144,7 +144,7 @@ func createContextFromTimeout(
 func (c CmdXRead) ReadLast(
 	key string, timeout int,
 ) (value rheltypes.StreamItem, err error) {
-	sub := pubsub.GetStreamManager().Subscribe(key)
+	sub := pubsub.GetStreamManager().Subscribe(key, false)
 	defer sub.Close()
 
 	ticker := time.NewTicker(defaultWaitTicker)
