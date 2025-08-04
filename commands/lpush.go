@@ -47,5 +47,5 @@ func (c CmdLPush) Exec(
 
 	instance.Set(parsedArgs.Key, updated)
 
-	return rheltypes.Integer(len(list)), nil
+	return rheltypes.Integer(len(updated)), nil
 }
