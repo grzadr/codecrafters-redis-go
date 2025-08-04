@@ -243,6 +243,8 @@ func (p *ParsedCommand) Commit(t **Transaction) (err error) {
 		*t = nil
 	}
 
+	p.sub = p.sub || (*t).isSubscribed()
+
 	return err
 }
 
@@ -359,7 +361,7 @@ func (t *Transaction) numSubscriptions() int {
 }
 
 func (t *Transaction) isSubscribed() bool {
-	return t.numSubscriptions() > 0
+	return t != nil && t.numSubscriptions() > 0
 }
 
 func (t *Transaction) digestSubscription(
