@@ -142,7 +142,7 @@ func (c CmdXRead) Exec(
 			return nil, c.ErrWrap(fmt.Errorf("failed to read last: %w", err))
 		}
 
-		if lastItem != nil {
+		if lastItem == nil {
 			return rheltypes.NewNullBulkString(), nil
 		}
 

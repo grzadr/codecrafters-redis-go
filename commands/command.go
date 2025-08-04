@@ -137,7 +137,7 @@ type ParsedCommand struct {
 	ack   int
 	multi bool
 	exec  bool
-	sub   int
+	sub   bool
 }
 
 func newParsedCommandErr(err error) (parsed *ParsedCommand) {
@@ -219,10 +219,11 @@ func newParsedCommandFromBytes(
 
 func (p *ParsedCommand) Commit(t **Transaction) (err error) {
 	switch p.cmd.(type) {
-	case CmdMulti, CmdSubscribe:
+	case CmdMulti:
 		*t = NewTransaction()
-
-		return err
+	case CmdSubscribe:
+		*t = NewTransaction()
+		p.sub = true
 	case CmdDiscard:
 		if *t == nil {
 			p.args = nil
@@ -409,7 +410,7 @@ func ExecuteCommand(
 
 			var result *CommandResult
 
-			if *tran != nil && !parsed.multi {
+			if *tran != nil && !parsed.multi && !parsed.sub {
 				(*tran).cmds = append((*tran).cmds, parsed)
 				result = newCommandResultQueued()
 			} else if result = parsed.Exec(tran); result.Err != nil {
