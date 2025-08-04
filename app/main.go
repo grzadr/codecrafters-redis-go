@@ -95,9 +95,13 @@ func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, end bool) {
 func publishMessage(conn *net.TCPConn, transaction *commands.Transaction) {
 	for transaction.IsSubscribed() {
 		for name, sub := range transaction.IterSubscriptions() {
+		inner:
 			for {
 				select {
 				case msg := <-sub.Messages:
+					if msg == nil {
+						break inner
+					}
 					message := []string{
 						"message",
 						name,
@@ -108,14 +112,12 @@ func publishMessage(conn *net.TCPConn, transaction *commands.Transaction) {
 					)
 
 				case <-time.After(50 * time.Millisecond):
+					break inner
 				}
 			}
 		}
-
-		time.Sleep(500 * time.Millisecond)
+		// time.Sleep(500 * time.Millisecond)
 	}
-
-	log.Println("terminated")
 }
 
 func masterExecuteCommand(
@@ -124,8 +126,6 @@ func masterExecuteCommand(
 	transaction **commands.Transaction,
 ) (keepConn bool, err error) {
 	for result := range commands.ExecuteCommand(cmd, transaction) {
-		log.Println("result")
-
 		if err = sendResponse(conn, result); err != nil {
 			return keepConn, err
 		}

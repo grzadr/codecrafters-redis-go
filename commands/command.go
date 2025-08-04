@@ -229,6 +229,8 @@ func (p *ParsedCommand) Commit(t **Transaction) (err error) {
 		}
 
 		p.sub = true
+	case CmdUnsubscribe:
+		p.args.Append(rheltypes.Integer((*t).subscriptions[p.args.First().String()]))
 	case CmdDiscard:
 		if *t == nil {
 			p.args = nil
