@@ -2,7 +2,7 @@ package commands
 
 import (
 	"fmt"
-	"time"
+	"log"
 
 	"github.com/codecrafters-io/redis-starter-go/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
@@ -24,8 +24,8 @@ func (c CmdBLPop) ReadLast(
 	sub := pubsub.GetStreamManager().Subscribe(key, true)
 	defer sub.Close()
 
-	ticker := time.NewTicker(defaultWaitTicker)
-	defer ticker.Stop()
+	// ticker := time.NewTicker(defaultWaitTicker)
+	// defer ticker.Stop()
 
 	ctx, cancel := createContextFromTimeout(timeout)
 	defer cancel()
@@ -37,7 +37,7 @@ func (c CmdBLPop) ReadLast(
 
 			if !ok {
 				return nil, fmt.Errorf(
-					"expected stream, got %T %v",
+					"expected rheltype, got %T %v",
 					msg,
 					msg,
 				)
@@ -58,11 +58,13 @@ func (c CmdBLPop) Exec(
 
 	timeout, _ := args.At(1).Float()
 
-	last, err := c.ReadLast(key, int(timeout)*milisecondInSecond)
+	last, err := c.ReadLast(key, int(timeout*milisecondInSecond))
 
 	if err != nil {
 		return nil, c.ErrWrap(fmt.Errorf("failed to read last: %w", err))
 	} else if last == nil {
+		log.Println("returning null string")
+
 		return rheltypes.NewNullBulkString(), nil
 	} else {
 		return rheltypes.Array{
