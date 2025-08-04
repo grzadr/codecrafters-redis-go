@@ -108,4 +108,27 @@ func (a Array) TypeName() string {
 	return "array"
 }
 
+func (a Array) Range(start, stop int) (out Array) {
+	// log.Println(start, stop, len(a))
+	start = a.normalizePos(start)
+	stop = a.normalizePos(stop)
+
+	// log.Println(start, stop)
+
+	out = make(Array, stop-start+1)
+	copy(out, a[start:stop+1])
+
+	return
+}
+
+func (a Array) normalizePos(pos int) int {
+	if pos < 0 {
+		return len(a) + pos
+	} else if pos >= len(a) {
+		return len(a) - 1
+	} else {
+		return pos
+	}
+}
+
 func (a Array) isRhelType() {}

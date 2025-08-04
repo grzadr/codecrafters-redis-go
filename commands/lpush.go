@@ -2,35 +2,20 @@ package commands
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
-type CmdRPushArgs struct {
-	Key   string
-	Items []rheltypes.RhelType
-}
-
-func NewCmdRLPushArgs(args rheltypes.Array) (parsed CmdRPushArgs, err error) {
-	parsed.Key = args.At(0).String()
-	parsed.Items = make([]rheltypes.RhelType, len(args)-1)
-
-	if len(args) > 1 {
-		copy(parsed.Items, args[1:])
-	}
-
-	return
-}
-
-type CmdRPush struct {
+type CmdLPush struct {
 	BaseCommand
 }
 
-func NewCmdRPush() CmdRPush {
-	return CmdRPush{BaseCommand: BaseCommand("RPUSH")}
+func NewCmdLPush() CmdLPush {
+	return CmdLPush{BaseCommand: BaseCommand("LPUSH")}
 }
 
-func (c CmdRPush) Exec(
+func (c CmdLPush) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
 	parsedArgs, err := NewCmdRLPushArgs(args)
@@ -52,11 +37,15 @@ func (c CmdRPush) Exec(
 		return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
 	}
 
-	for _, item := range parsedArgs.Items {
-		list = append(list, item)
+	updated := make(rheltypes.Array, len(list)+len(parsedArgs.Items))
+
+	for _, item := range slices.Backward(parsedArgs.Items) {
+		updated = append(updated, item)
 	}
 
-	instance.Set(parsedArgs.Key, list)
+	copy(updated[len(parsedArgs.Items):], list)
+
+	instance.Set(parsedArgs.Key, updated)
 
 	return rheltypes.Integer(len(list)), nil
 }
