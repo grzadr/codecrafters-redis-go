@@ -2,7 +2,6 @@ package rheltypes
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 )
@@ -110,11 +109,11 @@ func (a Array) TypeName() string {
 }
 
 func (a Array) Range(start, stop int) (out Array) {
-	log.Println(start, stop, len(a))
+	// log.Println(start, stop, len(a))
 	start = a.normalizePos(start)
 	stop = a.normalizePos(stop)
 
-	log.Println(start, stop)
+	// log.Println(start, stop)
 
 	if start > stop {
 		return Array{}
