@@ -38,12 +38,16 @@ func (c CmdLPush) Exec(
 	}
 
 	updated := make(rheltypes.Array, len(list)+len(parsedArgs.Items))
+	i := 0
 
 	for _, item := range slices.Backward(parsedArgs.Items) {
-		updated = append(updated, item)
+		updated[i] = item
+		i++
 	}
 
-	copy(updated[len(parsedArgs.Items):], list)
+	if len(list) > 0 {
+		copy(updated[len(parsedArgs.Items):], list)
+	}
 
 	instance.Set(parsedArgs.Key, updated)
 
