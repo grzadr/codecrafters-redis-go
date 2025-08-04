@@ -222,7 +222,10 @@ func (p *ParsedCommand) Commit(t **Transaction) (err error) {
 	case CmdMulti:
 		*t = NewTransaction()
 	case CmdSubscribe:
-		*t = NewTransaction()
+		if *t == nil {
+			*t = NewTransaction()
+		}
+
 		p.sub = true
 	case CmdDiscard:
 		if *t == nil {
