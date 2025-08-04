@@ -99,6 +99,7 @@ var commandMap = map[string]func() RhelCommand{
 	"INFO":     func() RhelCommand { return NewCmdInfo() },
 	"KEYS":     func() RhelCommand { return NewCmdKeys() },
 	"LLEN":     func() RhelCommand { return NewCmdLLen() },
+	"LPOP":     func() RhelCommand { return NewCmdLPop() },
 	"LPUSH":    func() RhelCommand { return NewCmdLPush() },
 	"LRANGE":   func() RhelCommand { return NewCmdLRange() },
 	"MULTI":    func() RhelCommand { return NewCmdMulti() },
