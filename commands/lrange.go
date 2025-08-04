@@ -21,10 +21,6 @@ func (c CmdLRange) Exec(
 	start, _ := args.At(1).Integer()
 	stop, _ := args.At(2).Integer()
 
-	if start > stop {
-		return rheltypes.Array{}, nil
-	}
-
 	instance := GetDataMapInstance()
 
 	value, found := instance.Get(key)
