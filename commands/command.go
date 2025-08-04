@@ -109,6 +109,7 @@ var commandMap = map[string]func() RhelCommand{
 	"MULTI":       func() RhelCommand { return NewCmdMulti() },
 	"PING":        func() RhelCommand { return NewCmdPing() },
 	"PSYNC":       func() RhelCommand { return NewCmdPsync() },
+	"PUBLISH":     func() RhelCommand { return NewCmdPublish() },
 	"REPLCONF":    func() RhelCommand { return NewCmdReplconf() },
 	"RPUSH":       func() RhelCommand { return NewCmdRPush() },
 	"SET":         func() RhelCommand { return NewCmdSet() },

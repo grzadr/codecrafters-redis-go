@@ -298,6 +298,19 @@ func (m *StreamManager) run() {
 	}
 }
 
+func (m *StreamManager) NumSubscribers(streamName string) int {
+	m.mu.RLock()
+	st, exists := m.streams[streamName]
+
+	m.mu.RUnlock()
+
+	if !exists {
+		return 0
+	}
+
+	return len(st.subscribers)
+}
+
 var (
 	streamManager     *StreamManager
 	streamManagerOnce sync.Once
