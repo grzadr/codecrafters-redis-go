@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"net"
 	"sync"
-	"time"
 )
 
 const (
 	defaultConnectionCapacity = 16
-	defaultTcpReadBuffer      = 64 * 1024
-	defaultReadTimeout        = 50 * time.Millisecond
 )
 
 type ConnectionPool struct {
@@ -80,13 +77,6 @@ func (p *ConnectionPool) Resend(cmd []byte, ack bool) error {
 	return nil
 }
 
-// func (p *ConnectionPool) NumConnections() int {
-// 	p.mutex.Lock()
-// 	defer p.mutex.Unlock()
-
-// 	return len(p.connections)
-// }
-
 func (p *ConnectionPool) NumResend() int {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
@@ -100,34 +90,6 @@ func (p *ConnectionPool) NumAcknowledged() int {
 
 	return len(p.ack)
 }
-
-// func (p *ConnectionPool) readWithTimeout(
-// 	conn net.Conn,
-// 	buf []byte,
-// 	timeout time.Duration,
-// ) (int, error) {
-// 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-// 	defer cancel()
-
-// 	type result struct {
-// 		n   int
-// 		err error
-// 	}
-
-// 	resultCh := make(chan result, 1)
-
-// 	go func() {
-// 		n, err := conn.Read(buf)
-// 		resultCh <- result{n: n, err: err}
-// 	}()
-
-// 	select {
-// 	case res := <-resultCh:
-// 		return res.n, res.err
-// 	case <-ctx.Done():
-// 		return 0, nil
-// 	}
-// }
 
 func GetConnectionPool() *ConnectionPool {
 	poolOnce.Do(func() {

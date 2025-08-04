@@ -222,6 +222,22 @@ func (m *StreamManager) Subscribe(
 	return st.subscribe()
 }
 
+func (m *StreamManager) GetSubscription(
+	streamName string,
+	subscriberId int,
+) *Subscription {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	st, exists := m.streams[streamName]
+
+	if !exists {
+		return nil
+	}
+
+	return st.subscribers[subscriberId]
+}
+
 // Publish sends a message to all subscribers of a stream.
 func (m *StreamManager) Publish(streamName string, msg any) {
 	m.mu.RLock()
@@ -276,6 +292,19 @@ func (m *StreamManager) Unsubscribe(
 	st.subscribers[subscriptionId].Close()
 }
 
+func (m *StreamManager) NumSubscribers(streamName string) int {
+	m.mu.RLock()
+	st, exists := m.streams[streamName]
+
+	m.mu.RUnlock()
+
+	if !exists {
+		return 0
+	}
+
+	return len(st.subscribers)
+}
+
 func (m *StreamManager) run() {
 	for {
 		deletionList := make([]string, 0, len(m.streams))
@@ -296,19 +325,6 @@ func (m *StreamManager) run() {
 
 		m.mu.Unlock()
 	}
-}
-
-func (m *StreamManager) NumSubscribers(streamName string) int {
-	m.mu.RLock()
-	st, exists := m.streams[streamName]
-
-	m.mu.RUnlock()
-
-	if !exists {
-		return 0
-	}
-
-	return len(st.subscribers)
 }
 
 var (

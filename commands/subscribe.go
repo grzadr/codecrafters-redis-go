@@ -20,7 +20,7 @@ func (c CmdSubscribe) Exec(
 ) (value rheltypes.RhelType, err error) {
 	key := args.At(0).String()
 
-	sub := pubsub.GetStreamManager().Subscribe(key, true)
+	sub := pubsub.GetStreamManager().Subscribe(key, false)
 
 	// // timeout, _ := args.At(1).Float()
 	// last, err := pubsub.ReadLast(key, int(timeout*milisecondInSecond))

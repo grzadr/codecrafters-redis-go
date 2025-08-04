@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/codecrafters-io/redis-starter-go/pubsub"
 	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
@@ -244,7 +245,7 @@ func (p *ParsedCommand) Commit(t **Transaction) (err error) {
 		*t = nil
 	}
 
-	p.sub = p.sub || (*t).isSubscribed()
+	p.sub = p.sub || (*t).IsSubscribed()
 
 	return err
 }
@@ -272,6 +273,7 @@ func (p *ParsedCommand) Exec(t **Transaction) (result *CommandResult) {
 
 	if *t != nil {
 		(*t).digestSubscription(cmd, result)
+		result.Sub = (*t).SubStart
 	}
 
 	result.Resend = cmd.Resend()
@@ -283,7 +285,7 @@ func (p *ParsedCommand) Exec(t **Transaction) (result *CommandResult) {
 }
 
 func (p *ParsedCommand) verifySubscription(t **Transaction) bool {
-	return p.cmd.AllowedInSubscription() || *t == nil || !(*t).isSubscribed()
+	return p.cmd.AllowedInSubscription() || *t == nil || !(*t).IsSubscribed()
 }
 
 func (p *ParsedCommand) newErrorForbiddenCommand() rheltypes.Error {
@@ -303,6 +305,7 @@ type CommandResult struct {
 	Err            error
 	Size           int
 	Ack            int
+	Sub            bool
 }
 
 func newCommandResultQueued() (result *CommandResult) {
@@ -328,6 +331,8 @@ const defaultTransactionCapacity = 16
 type Transaction struct {
 	cmds          []*ParsedCommand
 	subscriptions map[string]int
+	lock          sync.RWMutex
+	SubStart      bool
 }
 
 func NewTransaction() *Transaction {
@@ -357,18 +362,43 @@ func (t *Transaction) Exec() (results []*CommandResult, responses rheltypes.Arra
 	return
 }
 
-func (t *Transaction) numSubscriptions() int {
-	return len(t.subscriptions)
+func (t *Transaction) IsSubscribed() bool {
+	if t == nil {
+		return false
+	}
+
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return t.numSubscriptions() > 0
 }
 
-func (t *Transaction) isSubscribed() bool {
-	return t != nil && t.numSubscriptions() > 0
+func (t *Transaction) IterSubscriptions() iter.Seq2[string, *pubsub.Subscription] {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	return func(yield func(string, *pubsub.Subscription) bool) {
+		st := pubsub.GetStreamManager()
+
+		for name, id := range t.subscriptions {
+			if !yield(name, st.GetSubscription(name, id)) {
+				return
+			}
+		}
+	}
+}
+
+func (t *Transaction) numSubscriptions() int {
+	return len(t.subscriptions)
 }
 
 func (t *Transaction) digestSubscription(
 	cmd RhelCommand,
 	result *CommandResult,
 ) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
 	switch cmd.(type) {
 	case CmdSubscribe:
 		arr := result.result.(rheltypes.Array)
@@ -376,6 +406,8 @@ func (t *Transaction) digestSubscription(
 		id, _ := arr.At(cmdSubscribeResultNumPos).Integer()
 
 		(*t).subscriptions[key] = id
+
+		(*t).SubStart = (*t).numSubscriptions() == 1
 
 		arr.Set(cmdSubscribeResultNumPos, rheltypes.Integer(t.numSubscriptions()))
 
@@ -388,7 +420,7 @@ func (t *Transaction) digestSubscription(
 
 		arr.Set(cmdSubscribeResultNumPos, rheltypes.Integer(t.numSubscriptions()))
 	case CmdPing:
-		if !t.isSubscribed() {
+		if t.numSubscriptions() == 0 {
 			return
 		}
 

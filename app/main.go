@@ -7,10 +7,12 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 
 	"github.com/codecrafters-io/redis-starter-go/commands"
 	"github.com/codecrafters-io/redis-starter-go/connection"
 	"github.com/codecrafters-io/redis-starter-go/pubsub"
+	"github.com/codecrafters-io/redis-starter-go/rheltypes"
 )
 
 const (
@@ -90,14 +92,46 @@ func readCommand(conn *net.TCPConn, errCh chan error) (cmd []byte, end bool) {
 	return
 }
 
+func publishMessage(conn *net.TCPConn, transaction *commands.Transaction) {
+	for transaction.IsSubscribed() {
+		for name, sub := range transaction.IterSubscriptions() {
+			for {
+				select {
+				case msg := <-sub.Messages:
+					message := []string{
+						"message",
+						name,
+						msg.(rheltypes.RhelType).String(),
+					}
+					conn.Write(
+						rheltypes.NewArrayFromStrings(message).Serialize(),
+					)
+
+				case <-time.After(50 * time.Millisecond):
+				}
+			}
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	log.Println("terminated")
+}
+
 func masterExecuteCommand(
 	conn *net.TCPConn,
 	cmd []byte,
 	transaction **commands.Transaction,
 ) (keepConn bool, err error) {
 	for result := range commands.ExecuteCommand(cmd, transaction) {
+		log.Println("result")
+
 		if err = sendResponse(conn, result); err != nil {
 			return keepConn, err
+		}
+
+		if result.Sub {
+			go publishMessage(conn, *transaction)
 		}
 
 		pool := connection.GetConnectionPool()
