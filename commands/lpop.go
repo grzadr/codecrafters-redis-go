@@ -49,7 +49,7 @@ func (c CmdLPop) Exec(
 		output = list.At(0)
 		list = list[1:]
 	} else {
-		output = list.Range(0, start)
+		output = list.Range(0, start-1)
 		list = list[min(start, len(list)):]
 	}
 
