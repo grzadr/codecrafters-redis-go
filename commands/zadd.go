@@ -57,7 +57,7 @@ func (c CmdZAdd) Exec(
 
 	value = rheltypes.Integer(0)
 
-	if set.Add(key, score) {
+	if !set.Add(key, score) {
 		value = rheltypes.Integer(1)
 	}
 
