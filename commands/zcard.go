@@ -21,7 +21,7 @@ const (
 func (c CmdZCard) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
-	key := args.At(posXRangeKey).String()
+	key := args.At(posZCardNameArg).String()
 	item, found := GetDataMapInstance().Get(key)
 
 	if !found {
