@@ -15,7 +15,7 @@ type SortedSetMember struct {
 }
 
 func (m SortedSetMember) AsBulkString() BulkString {
-	return NewBulkString(strconv.FormatFloat(m.score, 'e', 2, 64))
+	return NewBulkString(strconv.FormatFloat(m.score, 'e', 16, 64))
 }
 
 func (m SortedSetMember) asArray() Array {
@@ -105,6 +105,18 @@ func (s *SortedSet) Add(name string, score float64) (found bool) {
 	}
 
 	s.InsertMember(member)
+
+	return
+}
+
+func (s *SortedSet) Delete(name string) (found bool) {
+	var member *SortedSetMember
+
+	if member, found = s.Get(name); found {
+		delete(s.names, name)
+		index := s.indexMember(member)
+		s.members = slices.Delete(s.members, index, index+1)
+	}
 
 	return
 }

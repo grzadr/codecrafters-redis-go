@@ -25,8 +25,8 @@ import (
 
 const (
 	cmdZAddNameArg  = 0
-	cmdZAddKeyArg   = 1
-	cmdZAddScoreArg = 2
+	cmdZAddScoreArg = 1
+	cmdZAddKeyArg   = 2
 )
 
 type CmdZAdd struct {
@@ -41,8 +41,8 @@ func (c CmdZAdd) Exec(
 	args rheltypes.Array,
 ) (value rheltypes.RhelType, err error) {
 	name := args.At(cmdZAddNameArg).String()
-	score, _ := args.At(cmdZAddKeyArg).Float()
-	key := args.At(cmdZAddScoreArg).String()
+	key := args.At(cmdZAddKeyArg).String()
+	score, _ := args.At(cmdZAddScoreArg).Float()
 	instance := GetDataMapInstance()
 
 	var set rheltypes.SortedSet
