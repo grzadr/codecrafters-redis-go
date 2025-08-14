@@ -2,6 +2,7 @@ package rheltypes
 
 import (
 	"cmp"
+	"log"
 	"slices"
 	"strconv"
 )
@@ -39,29 +40,51 @@ func (s SortedSet) Get(name string) (member *SortedSetMember, found bool) {
 }
 
 func (s SortedSet) FindInsertIndex(
-	score float64,
+	other *SortedSetMember,
 ) (index int) {
 	index, _ = slices.BinarySearchFunc(
 		s.members,
-		score,
-		func(member *SortedSetMember, score float64) int {
-			return cmp.Compare(member.score, score)
+		other,
+		func(member, other *SortedSetMember) int {
+			log.Printf(
+				"%+v %+v %d %d",
+				*member,
+				*other,
+				cmp.Compare(member.score, other.score),
+				cmp.Compare(member.name, other.name),
+			)
+
+			if scoreCmp := cmp.Compare(member.score, other.score); scoreCmp == 0 {
+				return cmp.Compare(member.name, other.name)
+			} else {
+				return scoreCmp
+			}
 		},
 	)
+
+	log.Println("index:", index)
 
 	return
 }
 
-func (s SortedSet) Index(name string) int {
-	return slices.IndexFunc(s.members, func(member *SortedSetMember) bool {
-		return member.name == name
-	})
+func (s SortedSet) Index(name string) (index int, found bool) {
+	member, found := s.Get(name)
+
+	if !found {
+		return
+	}
+
+	index = s.indexMember(member)
+
+	log.Println("index", name, index)
+
+	return index, index > -1
 }
 
 func (s *SortedSet) InsertMember(member *SortedSetMember) {
 	s.members = slices.Insert(
 		s.members,
-		s.FindInsertIndex(member.score),
+		s.FindInsertIndex(member),
 		member,
 	)
 }
@@ -70,7 +93,7 @@ func (s *SortedSet) Add(name string, score float64) (found bool) {
 	var member *SortedSetMember
 	if member, found = s.Get(name); found {
 		member.score = score
-		index := s.Index(name)
+		index := s.indexMember(member)
 		s.members = slices.Delete(s.members, index, index+1)
 	} else {
 		member = &SortedSetMember{name: name, score: score}
@@ -126,6 +149,12 @@ func (s SortedSet) asArray() Array {
 	}
 
 	return output
+}
+
+func (s SortedSet) indexMember(member *SortedSetMember) (index int) {
+	return slices.IndexFunc(s.members, func(ref *SortedSetMember) bool {
+		return ref == member
+	})
 }
 
 func (s SortedSet) isRhelType() {}
