@@ -123,7 +123,7 @@ var commandMap = map[string]func() RhelCommand{
 	"XREAD":       func() RhelCommand { return NewCmdXRead() },
 	"ZADD":        func() RhelCommand { return NewCmdZAdd() },
 	"ZCARD":       func() RhelCommand { return NewCmdZCard() },
-	"ZRANGE":      func() RhelCommand { return NewCmdZAdd() },
+	"ZRANGE":      func() RhelCommand { return NewCmdZRange() },
 	"ZRANK":       func() RhelCommand { return NewCmdZRank() },
 }
 

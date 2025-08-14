@@ -14,10 +14,14 @@ type SortedSetMember struct {
 	score float64
 }
 
+func (m SortedSetMember) AsBulkString() BulkString {
+	return NewBulkString(strconv.FormatFloat(m.score, 'e', 2, 64))
+}
+
 func (m SortedSetMember) asArray() Array {
 	return Array{
 		NewBulkString(m.name),
-		NewBulkString(strconv.FormatFloat(m.score, 'e', 2, 64)),
+		m.AsBulkString(),
 	}
 }
 

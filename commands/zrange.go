@@ -30,18 +30,18 @@ func (c CmdZRange) Exec(
 		return make(rheltypes.Array, 0), nil
 	}
 
-	var stream rheltypes.SortedSet
+	var set rheltypes.SortedSet
 
 	var ok bool
 
-	if stream, ok = item.(rheltypes.SortedSet); !ok {
+	if set, ok = item.(rheltypes.SortedSet); !ok {
 		return nil, c.ErrWrap(fmt.Errorf("expected stream, got %T", value))
 	}
 
 	start, _ := args.At(posZRangeStartArg).Integer()
 	stop, _ := args.At(posZRangeStopArg).Integer()
 
-	value = stream.Range(
+	value = set.Range(
 		start,
 		stop,
 	)
